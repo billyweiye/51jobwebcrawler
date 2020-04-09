@@ -1,167 +1,109 @@
-{
- "nbformat": 4,
- "nbformat_minor": 2,
- "metadata": {
-  "language_info": {
-   "name": "python",
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "version": "3.7.4-final"
-  },
-  "orig_nbformat": 2,
-  "file_extension": ".py",
-  "mimetype": "text/x-python",
-  "name": "python",
-  "npconvert_exporter": "python",
-  "pygments_lexer": "ipython3",
-  "version": 3,
-  "kernelspec": {
-   "name": "python37464bitbaseconda54720cfe03b04e0e83850561fa7ba19f",
-   "display_name": "Python 3.7.4 64-bit ('base': conda)"
-  }
- },
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": 14,
-   "metadata": {},
-   "outputs": [
-    {
-     "output_type": "stream",
-     "name": "stdout",
-     "text": "https://search.51job.com/list/020000,000000,0000,00,9,99,%E6%95%B0%E6%8D%AE%E8%BF%90%E8%90%A5,2,1.html\nhtml is ready\nlist has been filled\nhttps://search.51job.com/list/020000,000000,0000,00,9,99,%E6%95%B0%E6%8D%AE%E8%BF%90%E8%90%A5,2,2.html\nhtml is ready\nlist has been filled\nhttps://search.51job.com/list/020000,000000,0000,00,9,99,%E6%95%B0%E6%8D%AE%E8%BF%90%E8%90%A5,2,3.html\nhtml is ready\nlist has been filled\nhttps://search.51job.com/list/020000,000000,0000,00,9,99,%E6%95%B0%E6%8D%AE%E8%BF%90%E8%90%A5,2,4.html\nhtml is ready\nlist has been filled\nhttps://search.51job.com/list/020000,000000,0000,00,9,99,%E6%95%B0%E6%8D%AE%E8%BF%90%E8%90%A5,2,5.html\nhtml is ready\nlist has been filled\ndataframe has been created\n"
-    },
-    {
-     "output_type": "execute_result",
-     "data": {
-      "text/plain": "               jobtitle         company location      salary  \\\n0          数据运营主管（财务方向）  上海贝锐信息科技股份有限公司   上海-杨浦区  1.2-1.5万/月   \n1                数据运营专员    上海走起网络科技有限公司   上海-长宁区    0.7-1万/月   \n2                数据运营主管  上海贝锐信息科技股份有限公司       上海    1-1.5万/月   \n3                数据运营专员      全联保险经纪有限公司   上海-杨浦区      6-8千/月   \n4                数据运营专员    上海量讯通信科技有限公司   上海-徐汇区    4.5-6千/月   \n5          运营管理（数据运营方向）    上海德佑物业顾问有限公司   上海-静安区      6-8千/月   \n6   数据运营和分析工程师-上海-00286    上海领健信息技术有限公司       上海  1.5-2.5万/月   \n7  电子商务数据运营(000932)（上海）        长虹・美菱中国区       上海    4.5-6千/月   \n8            数据运营（抖音方向）    上海弘亚文化传媒有限公司   上海-宝山区      6-8千/月   \n9          数据运营4500（酒店）    上海佩琪信息技术有限公司       上海      4-6千/月   \n\n                                                link  \n0  https://jobs.51job.com/shanghai-ypq/120712933....  \n1  https://jobs.51job.com/shanghai-cnq/119956871....  \n2  https://jobs.51job.com/shanghai/120860369.html...  \n3  https://jobs.51job.com/shanghai-ypq/116582576....  \n4  https://jobs.51job.com/shanghai-xhq/120733534....  \n5  https://jobs.51job.com/shanghai-jaq/117363581....  \n6  https://jobs.51job.com/shanghai/121086752.html...  \n7  https://jobs.51job.com/shanghai/116343708.html...  \n8  https://jobs.51job.com/shanghai-bsq/118288474....  \n9  https://jobs.51job.com/shanghai/119800308.html...  ",
-      "text/html": "<div>\n<style scoped>\n    .dataframe tbody tr th:only-of-type {\n        vertical-align: middle;\n    }\n\n    .dataframe tbody tr th {\n        vertical-align: top;\n    }\n\n    .dataframe thead th {\n        text-align: right;\n    }\n</style>\n<table border=\"1\" class=\"dataframe\">\n  <thead>\n    <tr style=\"text-align: right;\">\n      <th></th>\n      <th>jobtitle</th>\n      <th>company</th>\n      <th>location</th>\n      <th>salary</th>\n      <th>link</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td>0</td>\n      <td>数据运营主管（财务方向）</td>\n      <td>上海贝锐信息科技股份有限公司</td>\n      <td>上海-杨浦区</td>\n      <td>1.2-1.5万/月</td>\n      <td>https://jobs.51job.com/shanghai-ypq/120712933....</td>\n    </tr>\n    <tr>\n      <td>1</td>\n      <td>数据运营专员</td>\n      <td>上海走起网络科技有限公司</td>\n      <td>上海-长宁区</td>\n      <td>0.7-1万/月</td>\n      <td>https://jobs.51job.com/shanghai-cnq/119956871....</td>\n    </tr>\n    <tr>\n      <td>2</td>\n      <td>数据运营主管</td>\n      <td>上海贝锐信息科技股份有限公司</td>\n      <td>上海</td>\n      <td>1-1.5万/月</td>\n      <td>https://jobs.51job.com/shanghai/120860369.html...</td>\n    </tr>\n    <tr>\n      <td>3</td>\n      <td>数据运营专员</td>\n      <td>全联保险经纪有限公司</td>\n      <td>上海-杨浦区</td>\n      <td>6-8千/月</td>\n      <td>https://jobs.51job.com/shanghai-ypq/116582576....</td>\n    </tr>\n    <tr>\n      <td>4</td>\n      <td>数据运营专员</td>\n      <td>上海量讯通信科技有限公司</td>\n      <td>上海-徐汇区</td>\n      <td>4.5-6千/月</td>\n      <td>https://jobs.51job.com/shanghai-xhq/120733534....</td>\n    </tr>\n    <tr>\n      <td>5</td>\n      <td>运营管理（数据运营方向）</td>\n      <td>上海德佑物业顾问有限公司</td>\n      <td>上海-静安区</td>\n      <td>6-8千/月</td>\n      <td>https://jobs.51job.com/shanghai-jaq/117363581....</td>\n    </tr>\n    <tr>\n      <td>6</td>\n      <td>数据运营和分析工程师-上海-00286</td>\n      <td>上海领健信息技术有限公司</td>\n      <td>上海</td>\n      <td>1.5-2.5万/月</td>\n      <td>https://jobs.51job.com/shanghai/121086752.html...</td>\n    </tr>\n    <tr>\n      <td>7</td>\n      <td>电子商务数据运营(000932)（上海）</td>\n      <td>长虹・美菱中国区</td>\n      <td>上海</td>\n      <td>4.5-6千/月</td>\n      <td>https://jobs.51job.com/shanghai/116343708.html...</td>\n    </tr>\n    <tr>\n      <td>8</td>\n      <td>数据运营（抖音方向）</td>\n      <td>上海弘亚文化传媒有限公司</td>\n      <td>上海-宝山区</td>\n      <td>6-8千/月</td>\n      <td>https://jobs.51job.com/shanghai-bsq/118288474....</td>\n    </tr>\n    <tr>\n      <td>9</td>\n      <td>数据运营4500（酒店）</td>\n      <td>上海佩琪信息技术有限公司</td>\n      <td>上海</td>\n      <td>4-6千/月</td>\n      <td>https://jobs.51job.com/shanghai/119800308.html...</td>\n    </tr>\n  </tbody>\n</table>\n</div>"
-     },
-     "metadata": {},
-     "execution_count": 14
-    }
-   ],
-   "source": [
-    "#impport modules\n",
-    "import requests\n",
-    "import re\n",
-    "from bs4 import BeautifulSoup\n",
-    "import os\n",
-    "import pandas as pd\n",
-    "import time\n",
-    "from urllib.request import quote\n",
-    "\n",
-    "\n",
-    "\n",
-    "#get the html text from the webpage\n",
-    "def getHTMLText(url):\n",
-    "    try:\n",
-    "        r=requests.get(url,timeout=30)\n",
-    "        r.raise_for_status()\n",
-    "        r.encoding=r.apparent_encoding\n",
-    "        html=r.text\n",
-    "        print('html is ready')\n",
-    "        return html\n",
-    "    except:\n",
-    "        print('get html text failed')\n",
-    "\n",
-    "#get the code of the city \n",
-    "def citycoder(city):\n",
-    "    url='https://js.51jobcdn.com/in/js/2016/layer/area_array_c.js'\n",
-    "    r= requests.get(url,timeout=30)\n",
-    "    fl=r.text\n",
-    "    geocode = re.findall('\"([0-9]+)\":\"{}\"'.format(city),fl)[0]\n",
-    "    return geocode\n",
-    "\n",
-    "#soup the html file\n",
-    "def soupmaker(html):\n",
-    "    soup = BeautifulSoup(html,'html.parser')\n",
-    "    return soup \n",
-    "    print('soup is ready')\n",
-    "\n",
-    "#extract data we want from the soup\n",
-    "def listfiller(tags): #get the information we need\n",
-    "    jobtitle=list()\n",
-    "    joburl=list()\n",
-    "    company=list()\n",
-    "    location=list()\n",
-    "    salary=list()\n",
-    "    for tag in tags:\n",
-    "        try:\n",
-    "            if 't1' in tag.get('class',None):\n",
-    "                jobtitle.append(tag.find('a').string.strip())\n",
-    "                joburl.append(tag.find('a').get('href',None))\n",
-    "            if 't2' in tag.get('class',None):\n",
-    "                company.append(tag.string)\n",
-    "            if 't3' in tag.get('class',None):\n",
-    "                location.append(tag.string)\n",
-    "            if 't4' in tag.get('class',None):\n",
-    "                salary.append(tag.string)\n",
-    "            else:\n",
-    "                continue\n",
-    "        except:\n",
-    "            continue\n",
-    "    company=company[1:]\n",
-    "    location=location[1:]\n",
-    "    salary=salary[1:]\n",
-    "    print('list has been filled')\n",
-    "    return jobtitle,joburl,company,location,salary\n",
-    "\n",
-    "\n",
-    "\n",
-    "\n",
-    "jobtitle=[]\n",
-    "joburl=[]\n",
-    "company=[]\n",
-    "location=[]\n",
-    "salary=[]\n",
-    "\n",
-    "kw = quote(input('职位名称').strip())\n",
-    "dump=int(int(input('爬取多少页').strip())+1)\n",
-    "geocode=citycoder(str(input('城市').strip()))\n",
-    "for page in range(1,dump):\n",
-    "    url='https://search.51job.com/list/{},000000,0000,00,9,99,{},2,{}.html'.format(geocode,kw,page)\n",
-    "    print(url)\n",
-    "    html = getHTMLText(url)\n",
-    "    soup = soupmaker(html)\n",
-    "    \n",
-    "    tags=soup(class_=['t1','t2','t3','t4'])\n",
-    "    L=listfiller(tags)\n",
-    "\n",
-    "    jobtitle += L[0]\n",
-    "    joburl+=L[1]\n",
-    "    company+=L[2]\n",
-    "    location+=L[3]\n",
-    "    salary+=L[4]\n",
-    "\n",
-    "    time.sleep(2) # Slow things down so as to not hammer Wikipedia's servers\n",
-    "\n",
-    "\n",
-    "\n",
-    "\n",
-    "raw = {\n",
-    "    'jobtitle' : jobtitle,\n",
-    "    'company': company,\n",
-    "    'location': location,\n",
-    "    'salary': salary,\n",
-    "    'link': joburl\n",
-    "}\n",
-    "\n",
-    "df = pd.DataFrame(raw)\n",
-    "print('dataframe has been created')\n",
-    "\n",
-    "df.head(10)\n",
-    ""
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": []
-  }
- ]
+#impport modules
+import requests
+import re
+from bs4 import BeautifulSoup
+import os
+import pandas as pd
+import time
+from urllib.request import quote
+
+
+
+#get the html text from the webpage
+def getHTMLText(url):
+    try:
+        r=requests.get(url,timeout=30)
+        r.raise_for_status()
+        r.encoding=r.apparent_encoding
+        html=r.text
+        print('html is ready')
+        return html
+    except:
+        print('get html text failed')
+
+#get the code of the city 
+def citycoder(city):
+    url='https://js.51jobcdn.com/in/js/2016/layer/area_array_c.js'
+    r= requests.get(url,timeout=30)
+    fl=r.text
+    geocode = re.findall('"([0-9]+)":"{}"'.format(city),fl)[0]
+    return geocode
+
+#soup the html file
+def soupmaker(html):
+    soup = BeautifulSoup(html,'html.parser')
+    return soup 
+    print('soup is ready')
+
+#extract data we want from the soup
+def listfiller(tags): #get the information we need
+    jobtitle=list()
+    joburl=list()
+    company=list()
+    location=list()
+    salary=list()
+    for tag in tags:
+        try:
+            if 't1' in tag.get('class',None):
+                jobtitle.append(tag.find('a').string.strip())
+                joburl.append(tag.find('a').get('href',None))
+            if 't2' in tag.get('class',None):
+                company.append(tag.string)
+            if 't3' in tag.get('class',None):
+                location.append(tag.string)
+            if 't4' in tag.get('class',None):
+                salary.append(tag.string)
+            else:
+                continue
+        except:
+            continue
+    company=company[1:]
+    location=location[1:]
+    salary=salary[1:]
+    print('list has been filled')
+    return jobtitle,joburl,company,location,salary
+
+
+
+
+jobtitle=[]
+joburl=[]
+company=[]
+location=[]
+salary=[]
+
+kw = quote(input('职位名称').strip())
+dump=int(int(input('爬取多少页').strip())+1)
+geocode=citycoder(str(input('城市').strip()))
+for page in range(1,dump):
+    url='https://search.51job.com/list/{},000000,0000,00,9,99,{},2,{}.html'.format(geocode,kw,page)
+    print(url)
+    html = getHTMLText(url)
+    soup = soupmaker(html)
+    
+    tags=soup(class_=['t1','t2','t3','t4'])
+    L=listfiller(tags)
+
+    jobtitle += L[0]
+    joburl+=L[1]
+    company+=L[2]
+    location+=L[3]
+    salary+=L[4]
+
+    time.sleep(2) # Slow things down so as to not hammer Wikipedia's servers
+
+
+
+
+raw = {
+    'jobtitle' : jobtitle,
+    'company': company,
+    'location': location,
+    'salary': salary,
+    'link': joburl
 }
+
+df = pd.DataFrame(raw)
+print('dataframe has been created')
+
+df.head(10)
