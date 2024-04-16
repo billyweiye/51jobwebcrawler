@@ -3,7 +3,10 @@ import requests
 import re
 import time
 from urllib.request import quote
+import random
+import pandas as pd
 from acwCookie import getAcwScV2
+from notion_integration import Notion
 
 
 class JobSearch:
@@ -44,6 +47,8 @@ class JobSearch:
     def get_jobs_json(self,params):
         return self.search_jobs(params).json()
     
+
+    
     
 url = "https://we.51job.com/api/job/search-pc"
 
@@ -81,39 +86,80 @@ headers = {
   'uuid': '21ae369c1fecc95608a454bacdd16b4'
 }
 
-kw='Data Analyst'
-cities=['010000']
-page_num=1
-user_params = {
-    'api_key': '51job',
-    'timestamp': f'1712988972{int(time.time())}',
-    'keyword': f'{kw}',
-    'searchType': '2',
-    'function': '',
-    'industry': '',
-    'jobArea': f"{'%'.join(cities)}",
-    'jobArea2': '',
-    'landmark': '',
-    'metro': '',
-    'salary': '',
-    'workYear': '',
-    'degree': '',
-    'companyType': '',
-    'companySize': '',
-    'jobType': '',
-    'issueDate': '',
-    'sortType': '1',
-    'pageNum': f'{page_num}',
-    'pageSize': '20',
-    'source': '1',
-    'accountId': '',
-    'pageCode': 'sou%7Csou%7Csoulb',
-    'userLonLat': ''
-}
+
+
+result=[]
+page=1
+max_page=50
+while True:
+    print("Page Num: ",page)
+    kw='数据分析'
+    cities=['020000']
+    user_params = {
+        'api_key': '51job',
+        'timestamp': f'{int(time.time())}',
+        'keyword': f'{kw}',
+        'searchType': '2',
+        'function': '',
+        'industry': '',
+        'jobArea': f"{'%'.join(cities)}",
+        'jobArea2': '',
+        'landmark': '',
+        'metro': '',
+        'salary': '',
+        'workYear': '',
+        'degree': '',
+        'companyType': '',
+        'companySize': '',
+        'jobType': '',
+        'issueDate': '',
+        'sortType': '1',
+        'pageNum': page,
+        'pageSize': '20',
+        'source': '1',
+        'accountId': '',
+        'pageCode': 'sou%7Csou%7Csoulb',
+        'userLonLat': ''
+    }
 
 
 
 
-jobs = JobSearch(url, initial_cookies,headers)
-res = jobs.search_jobs(user_params)
-res_json=jobs.get_jobs_json(params=user_params)
+    jobs = JobSearch(url, initial_cookies,headers)
+    res_json=jobs.get_jobs_json(params=user_params)
+
+    if res_json['resultbody']['job']['items']:
+
+
+        result.append(res_json)
+
+    page+=1
+
+    if page>max_page:
+        break
+
+    time.sleep(random.randint(1,8))
+
+df=pd.DataFrame()
+for page in result:
+    df=df.append(pd.DataFrame(data=page['resultbody']['job']['items']))
+
+df['source']='51job'
+df.to_csv(f"result_{kw}_{int(time.time())}.csv",index=False)
+
+token=''
+db_id=''
+
+# open notion 
+nt=Notion(token)
+blocks=nt.convert_df_to_notion_block(df[['jobDescribe']])
+df=df.drop('property',axis=1)
+df=df.drop('jobDescribe',axis=1)
+properties=nt.convert_df_to_notion_properties(df)  
+
+for row,block in zip(properties,blocks):
+    if len(block[0]['paragraph']['rich_text'][0]['text']['content'])>2000:
+        block[0]['paragraph']['rich_text'][0]['text']['content']=block[0]['paragraph']['rich_text'][0]['text']['content'][:1999]
+    res=nt.add_content(db_id,row,block) 
+
+    time.sleep(0.6)
