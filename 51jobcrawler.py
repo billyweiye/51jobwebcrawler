@@ -2,11 +2,11 @@
 import requests
 import re
 import time
-from urllib.request import quote
 import random
 import pandas as pd
 from acwCookie import getAcwScV2
-from notion_integration import Notion
+from feishu_doc import Feishu
+import configparser
 
 
 class JobSearch:
@@ -90,7 +90,7 @@ headers = {
 
 result=[]
 page=1
-max_page=50
+max_page=30
 while True:
     print("Page Num: ",page)
     kw='数据分析'
@@ -144,22 +144,33 @@ df=pd.DataFrame()
 for page in result:
     df=df.append(pd.DataFrame(data=page['resultbody']['job']['items']))
 
-df['source']='51job'
 df.to_csv(f"result_{kw}_{int(time.time())}.csv",index=False)
 
-token=''
-db_id=''
 
-# open notion 
-nt=Notion(token)
-blocks=nt.convert_df_to_notion_block(df[['jobDescribe']])
-df=df.drop('property',axis=1)
-df=df.drop('jobDescribe',axis=1)
-properties=nt.convert_df_to_notion_properties(df)  
 
-for row,block in zip(properties,blocks):
-    if len(block[0]['paragraph']['rich_text'][0]['text']['content'])>2000:
-        block[0]['paragraph']['rich_text'][0]['text']['content']=block[0]['paragraph']['rich_text'][0]['text']['content'][:1999]
-    res=nt.add_content(db_id,row,block) 
 
-    time.sleep(0.6)
+
+# 读取配置文件
+config = configparser.ConfigParser()
+config.read('config.ini')
+
+# 获取配置值
+app_id = config['tokens']['app_id']
+app_secret = config['tokens']['app_secret']
+
+fs=Feishu(app_id=app_id,app_secret=app_secret)
+
+db_id = config['db_info']['db_id']
+table_id = config['db_info']['table_id']
+
+fields= [
+    {
+      "fields": {key: str(value) for key, value in row.items()}
+      } 
+      for row in df.to_dict("records") 
+  ]
+
+for i in range(1,len(fields)//400+2):
+    res=fs.add_records(db_id,table_id,fields[400*(i-1):400*i])
+
+    time.sleep(0.3)
