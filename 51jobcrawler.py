@@ -24,6 +24,9 @@ class JobSearch:
         geocode = re.findall('"([0-9]+)":"{}"'.format(city),fl)[0]
         return geocode
 
+
+
+
     def search_jobs(self, params):
         self.max_retry=self.max_retry-1
         if self.max_retry>=0:
@@ -31,6 +34,8 @@ class JobSearch:
             pattern = r"var arg1='([A-F0-9]+)';"
             # Search for the pattern in the JavaScript code
             arg1 = re.search(pattern, response.text)
+            if self.cookies.get('acw_sc__v2') is None and arg1 is None:
+                raise Exception("Failed to Get arg1")
             if arg1:
                 print(f"retry:{10-self.max_retry} set_cookies")
                 arg1=arg1.group(1)
@@ -90,15 +95,19 @@ headers = {
 
 result=[]
 page=1
-max_page=30
+max_page=50
+
+# initialize search engine
+jobs = JobSearch(url, initial_cookies,headers)
+
 while True:
     print("Page Num: ",page)
-    kw='数据分析'
+    kw='data analyst'
     cities=['020000']
     user_params = {
         'api_key': '51job',
         'timestamp': f'{int(time.time())}',
-        'keyword': f'{kw}',
+        'keyword': kw,
         'searchType': '2',
         'function': '',
         'industry': '',
@@ -122,16 +131,15 @@ while True:
         'userLonLat': ''
     }
 
-
-
-
-    jobs = JobSearch(url, initial_cookies,headers)
     res_json=jobs.get_jobs_json(params=user_params)
 
-    if res_json['resultbody']['job']['items']:
+    if res_json is not str:
+        if res_json['resultbody']['job']['items']:
 
 
-        result.append(res_json)
+            result.append(res_json)
+    else:
+        print(res_json)
 
     page+=1
 
