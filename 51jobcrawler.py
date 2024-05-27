@@ -7,6 +7,8 @@ import pandas as pd
 from acwCookie import getAcwScV2
 from feishu_doc import Feishu
 import configparser
+import logging
+
 
 
 class JobSearch:
@@ -55,7 +57,13 @@ class JobSearch:
 
 if __name__=="__main__":
 
+    # 配置日志记录
+    logging.basicConfig(level=logging.DEBUG,  # 设置日志级别
+                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # 设置日志格式
+                        handlers=[logging.StreamHandler()])  # 设置日志处理器
 
+    # 创建日志记录器
+    logger = logging.getLogger(__name__)
 
     # 读取配置文件
     config = configparser.ConfigParser()
@@ -109,7 +117,8 @@ if __name__=="__main__":
     }
 
 
-    kws=['data analyst','business analyst','crm analyst','sap analyst','BI','data scientist','data engineer']
+    #kws=['data analyst','business analyst','crm analyst','sap analyst','BI','data scientist','data engineer']
+    kws=config['key_words']['kws'].split(',')
 
     for kw in kws:
 
