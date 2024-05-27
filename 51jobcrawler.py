@@ -118,10 +118,10 @@ if __name__=="__main__":
 
 
     #kws=['data analyst','business analyst','crm analyst','sap analyst','BI','data scientist','data engineer']
-    kws=config['key_words']['kws'].split(',')
+    kws=config['job_search']['kws'].split(',')
+    cities=config['job_search']['cities'].split(',')
 
     for kw in kws:
-
         result=[]
         page=1
         max_page=3
@@ -131,7 +131,6 @@ if __name__=="__main__":
 
         while True:
             print("Page Num: ",page)
-            cities=['020000']
             user_params = {
                 'api_key': '51job',
                 'timestamp': f'{int(time.time())}',
