@@ -11,21 +11,21 @@ import datetime
 from logging.handlers import TimedRotatingFileHandler
 
 
-# # 配置日志记录器
-# logger = logging.getLogger(__name__)
-# logger.setLevel(logging.INFO)
+# 配置日志记录器
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-# # 创建 TimedRotatingFileHandler，每 6 小时滚动一次日志文件
-# log_handler = TimedRotatingFileHandler('app.log', when='H', interval=6, backupCount=4)
-# log_handler.setLevel(logging.DEBUG)
+# 创建 TimedRotatingFileHandler，每 6 小时滚动一次日志文件
+log_handler = TimedRotatingFileHandler('app.log', when='H', interval=6, backupCount=4)
+log_handler.setLevel(logging.DEBUG)
 
 
-# # 配置日志格式
-# log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# log_handler.setFormatter(log_formatter)
+# 配置日志格式
+log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+log_handler.setFormatter(log_formatter)
 
-# # 添加处理器到记录器
-# logger.addHandler(log_handler)
+# 添加处理器到记录器
+logger.addHandler(log_handler)
 
 # 读取配置文件
 config = configparser.ConfigParser()
