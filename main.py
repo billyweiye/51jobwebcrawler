@@ -154,21 +154,20 @@ def search():
 
 timezone = pytz.timezone("Asia/Shanghai")
 
-# 随机生成每天下午5-8点之间的一个时间点
-# random_hour = random.randint(17, 20)
-# random_minute = random.randint(0, 59)
-# random_time = f"{random_hour:02d}:{random_minute:02d}"
-# scheduled_time = timezone.localize(datetime.strptime(random_time, "%H:%M"))
-
-scheduled_time = timezone.localize(datetime.datetime.strptime("23:36", "%H:%M"))
+#随机生成每天下午5-8点之间的一个时间点
+random_hour = random.randint(17, 20)
+random_minute = random.randint(0, 59)
+random_time = f"{random_hour:02d}:{random_minute:02d}"
 
 
-# # 在每天下午5-8点之间的随机时间点启动任务
-# scheduler=schedule.Scheduler()
-# scheduler.every().day.at(f"{scheduled_time.hour}:{scheduled_time.minute}").do(search)
-# while True:
-#     scheduler.run_pending()
-#     time.sleep(0.5)
+
+# 在每天下午5-8点之间的随机时间点启动任务
+scheduler=schedule.Scheduler()
+#scheduler.every().day.at(random_time,timezone).do(search)
+scheduler.every().day.at("21:57",timezone).do(search)
+
+while True:
+    scheduler.run_pending()
+    time.sleep(0.5)
 
 
-search()
