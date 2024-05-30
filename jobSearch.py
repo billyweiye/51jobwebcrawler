@@ -2,7 +2,7 @@
 import requests
 import re
 from acwCookie import getAcwScV2
-
+import certifi 
 
 
 
@@ -16,7 +16,7 @@ class JobSearch:
     #get the code of the city 
     def citycoder(city):
         url='https://js.51jobcdn.com/in/js/2016/layer/area_array_c.js'
-        r= requests.get(url,timeout=30,verify=False)
+        r= requests.get(url,timeout=30,verify=certifi.where())
         fl=r.text
         geocode = re.findall('"([0-9]+)":"{}"'.format(city),fl)[0]
         return geocode
@@ -27,7 +27,7 @@ class JobSearch:
     def search_jobs(self, params):
         self.max_retry=self.max_retry-1
         if self.max_retry>=0:
-            response = requests.get(self.url,cookies=self.cookies, headers=self.headers, params=params,verify=False)
+            response = requests.get(self.url,cookies=self.cookies, headers=self.headers, params=params,verify=certifi.where())
             pattern = r"var arg1='([A-F0-9]+)';"
             # Search for the pattern in the JavaScript code
             arg1 = re.search(pattern, response.text)
