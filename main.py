@@ -79,15 +79,16 @@ def search():
     }
 
     for kw in kws:
+        logger.info(f"开始搜索关键词：{kw}")
         result = []
         page = 1
-        max_page = 3
+        max_page = 2
 
         # initialize search engine
         jobs = JobSearch(url, initial_cookies, headers)
 
         while True:
-            print("Page Num: ", page)
+            logger.info(f"Page Num: {page}")
             user_params = {
                 "api_key": "51job",
                 "timestamp": f"{int(time.time())}",
@@ -133,7 +134,7 @@ def search():
 
         df = pd.DataFrame()
         for page in result:
-            df = df.append(pd.DataFrame(data=page["resultbody"]["job"]["items"]))
+            df = pd.concat([df,pd.DataFrame(data=page["resultbody"]["job"]["items"])],ignore_index=True)
         df["search_kw"] = kw
 
         # 写入飞书多维表
@@ -146,6 +147,8 @@ def search():
 
         for i in range(1, len(fields) // 400 + 2):
             res = fs.add_records(db_id, table_id, fields[400 * (i - 1) : 400 * i])
+
+            logger.info(f"写入飞书数据库： {res.get('code')}")
 
             time.sleep(0.3)
 
