@@ -161,6 +161,7 @@ timezone = pytz.timezone("Asia/Shanghai")
 random_hour = random.randint(6, 8)
 random_minute = random.randint(0, 59)
 random_time = f"{random_hour:02d}:{random_minute:02d}"
+logger.info(f"next running time: {random_time}")
 
 
 
