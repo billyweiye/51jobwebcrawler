@@ -158,7 +158,7 @@ def search():
 timezone = pytz.timezone("Asia/Shanghai")
 
 #随机生成每天下午5-8点之间的一个时间点
-random_hour = random.randint(6,13)
+random_hour = random.randint(6,9)
 random_minute = random.randint(0, 59)
 random_time = f"{random_hour:02d}:{random_minute:02d}"
 logger.info(f"next running time: {random_time}")
