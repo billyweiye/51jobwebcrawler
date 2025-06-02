@@ -2,7 +2,6 @@ import time
 import pandas as pd
 import random
 from jobSearch import JobSearch
-from feishu_doc import Feishu
 import logging
 import configparser
 import schedule
