@@ -214,11 +214,12 @@ def search():
                     sleep_time = random.randint(3, 15)
                     logger.info(f"关键词: {kw} 城市： {city}，第 {page-1} 页抓取完成，休眠 {sleep_time} 秒")
                     time.sleep(sleep_time)
-
-                logger.info(f"关键词: {kw} 城市： {city}  抓取任务完成，休眠一段时间")
-                time.sleep(random.randint(3, 30))
-            logger.info(f"关键词: {kw} 的所有城市搜索任务已完成")
-            time.sleep(random.randint(3, 30))
+                sleep_time=random.randint(3, 30)
+                logger.info(f"关键词: {kw} 城市： {city}  抓取任务完成，休眠 {sleep_time} 秒")
+                time.sleep(sleep_time)
+            sleep_time=random.randint(3, 30)
+            logger.info(f"关键词: {kw} 的所有城市搜索任务已完成，休眠 {sleep_time} 秒")
+            time.sleep(sleep_time)
         logger.info("本次搜索任务全部完成")
     except Exception as e:
         logger.exception(f"search 函数发生未捕获异常: {e}")
