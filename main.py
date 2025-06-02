@@ -227,17 +227,23 @@ def search():
 
 timezone = pytz.timezone("Asia/Shanghai")
 
-#随机生成每天下午5-8点之间的一个时间点
-random_hour = random.randint(6,9)
+# 随机生成每天下午6-9点之间的一个时间点
+random_hour = random.randint(6, 9)
 random_minute = random.randint(0, 59)
 random_time = f"{random_hour:02d}:{random_minute:02d}"
-logger.info(f"next running time: {random_time}")
+logger.info(f"next running time (evening): {random_time}")
 
+# 新增：随机生成每天晚上21-22点之间的一个时间点
+night_hour = random.randint(21, 22)
+night_minute = random.randint(0, 59)
+night_time = f"{night_hour:02d}:{night_minute:02d}"
+logger.info(f"next running time (night): {night_time}")
 
-
-# 在每天下午5-8点之间的随机时间点启动任务
-scheduler=schedule.Scheduler()
-scheduler.every().day.at(random_time,timezone).do(search)
+# 在每天下午6-9点之间的随机时间点启动任务
+scheduler = schedule.Scheduler()
+scheduler.every().day.at(random_time, timezone).do(search)
+# 在每天晚上21-22点之间的随机时间点启动任务
+scheduler.every().day.at(night_time, timezone).do(search)
 
 logger.info("程序启动，配置定时任务")
 
