@@ -8,6 +8,7 @@ import configparser
 import schedule
 import pytz
 import datetime
+from sqlalchemy import create_engine
 from logging.handlers import TimedRotatingFileHandler
 
 
@@ -29,7 +30,7 @@ logger.addHandler(log_handler)
 
 # 读取配置文件
 config = configparser.ConfigParser()
-config.read("config.ini")
+config.read("config.ini"，encoding='utf-8')
 
 
 def search():
@@ -137,20 +138,32 @@ def search():
             df = pd.concat([df,pd.DataFrame(data=page["resultbody"]["job"]["items"])],ignore_index=True)
         df["search_kw"] = kw
 
-        # 写入飞书多维表
-        fs = Feishu(app_id=app_id, app_secret=app_secret)
+        df=df[['jobId','jobType','jobName','jobTags','workAreaCode','jobAreaCode','jobAreaString','hrefAreaPinYin','provideSalaryString','issueDateString','confirmDateString','workYear','workYearString','degreeString','industryType1','industryType2','industryType1Str','industryType2Str','major1Str','companyName','fullCompanyName','companyLogo','companyTypeString','companySizeString','companySizeCode','companyIndustryType1Str','companyIndustryType2Str','hrUid','hrName','smallHrLogoUrl','hrPosition','hrLabels','updateDateTime','lon','lat','jobHref','jobDescribe','companyHref','term','termStr','jobTagsForOrder','jobSalaryMax','jobSalaryMin','isReprintJob','applyTimeText','jobReleaseType','coId','search_kw']]
 
-        fields = [
-            {"fields": {key: str(value) for key, value in row.items()}}
-            for row in df.to_dict("records")
-        ]
+        # 写入MySQL数据库        
+        # 读取数据库配置
+        mysql_config = config['mysql']
+        
+        # 创建数据库连接
+        engine = create_engine(
+            f"mysql+pymysql://{mysql_config['user']}:{mysql_config['password']}@{mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}?charset=utf8mb4"
+        )
 
-        for i in range(1, len(fields) // 400 + 2):
-            res = fs.add_records(db_id, table_id, fields[400 * (i - 1) : 400 * i])
+        # 将 list 类型字段转为字符串
+        list_columns = ['jobTags', 'hrLabels', 'jobTagsForOrder']
+        for col in list_columns:
+            if col in df.columns:
+                df[col] = df[col].apply(lambda x: ','.join(x) if isinstance(x, list) else (str(x) if pd.notnull(x) else None))
 
-            logger.info(f"写入飞书数据库： {res.get('code')}")
-
-            time.sleep(0.3)
+        # 处理薪资字段，空字符串转为 None，并转为 float
+        for col in ['jobSalaryMax', 'jobSalaryMin']:
+            if col in df.columns:
+                df[col] = df[col].replace('', None)
+                df[col] = df[col].astype(float)
+        
+        # 写入数据
+        df.to_sql('job_listings', con=engine, if_exists='append', index=False,chunksize=1000, method='multi')
+        logger.info(f"成功写入 {len(df)} 条数据到MySQL数据库")
 
         time.sleep(random.randint(1, 30))
 
@@ -172,7 +185,3 @@ scheduler.every().day.at(random_time,timezone).do(search)
 while True:
     scheduler.run_pending()
     time.sleep(0.5)
-
-
-
-
