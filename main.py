@@ -27,9 +27,45 @@ log_handler.setFormatter(log_formatter)
 # 添加处理器到记录器
 logger.addHandler(log_handler)
 
+# 省级代码
+province_codes = {
+    "010000": "北京",
+    "020000": "上海",
+    "030000": "广东省",
+    "040000": "深圳",
+    "050000": "天津",
+    "060000": "重庆",
+    "070000": "江苏省",
+    "080000": "浙江省",
+    "090000": "四川省",
+    "100000": "海南省",
+    "110000": "福建省",
+    "120000": "山东省",
+    "130000": "江西省",
+    "140000": "广西",
+    "150000": "安徽省",
+    "160000": "河北省",
+    "170000": "河南省",
+    "180000": "湖北省",
+    "190000": "湖南省",
+    "200000": "陕西省",
+    "210000": "山西省",
+    "220000": "黑龙江省",
+    "230000": "辽宁省",
+    "240000": "吉林省",
+    "250000": "云南省",
+    "260000": "贵州省",
+    "270000": "甘肃省",
+    "280000": "内蒙古",
+    "290000": "宁夏",
+    "300000": "西藏",
+    "310000": "新疆",
+    "320000": "青海省" 
+    }
+
 # 读取配置文件
 config = configparser.ConfigParser()
-config.read("config.ini"，encoding='utf-8')
+config.read("config.ini",encoding='utf-8')
 
 
 def search():
@@ -43,6 +79,9 @@ def search():
     # kws=['data analyst','business analyst','crm analyst','sap analyst','BI','data scientist','data engineer']
     kws = config["job_search"]["kws"].split(",")
     cities = config["job_search"]["cities"].split(",")
+
+    if '000000' in cities:
+        cities = list(province_codes.keys())
 
     url = "https://we.51job.com/api/job/search-pc"
 
@@ -82,7 +121,7 @@ def search():
         logger.info(f"开始搜索关键词：{kw}")
         result = []
         page = 1
-        max_page = 2
+        max_page = config.getint("job_search", "max_page", fallback=10)
 
         # initialize search engine
         jobs = JobSearch(url, initial_cookies, headers)
@@ -118,53 +157,60 @@ def search():
 
             res_json = jobs.get_jobs_json(params=user_params)
 
-            if res_json is not str:
-                if res_json["resultbody"]["job"]["items"]:
-
+            if res_json and isinstance(res_json, dict):
+                if res_json.get("resultbody", {}).get("job", {}).get("items"):
                     result.append(res_json)
+                    logger.info(f"成功获取 {len(res_json['resultbody']['job']['items'])} 条数据, 关键词: {kw}")
+                else:
+                    logger.warning(f"无数据返回: {res_json}")
+                    break
             else:
-                print(res_json)
+                logger.error(f"获取数据失败: {res_json}, params: {user_params}")
+                break
+
+            # 写入数据库
+            df = pd.DataFrame(data=res_json["resultbody"]["job"]["items"])
+            df["search_kw"] = kw
+
+            expected_columns = ['jobId','jobType','jobName','jobTags','workAreaCode','jobAreaCode','jobAreaString','hrefAreaPinYin','provideSalaryString','issueDateString','confirmDateString','workYear','workYearString','degreeString','industryType1','industryType2','industryType1Str','industryType2Str','major1Str','companyName','fullCompanyName','companyLogo','companyTypeString','companySizeString','companySizeCode','companyIndustryType1Str','companyIndustryType2Str','hrUid','hrName','smallHrLogoUrl','hrPosition','hrLabels','updateDateTime','lon','lat','jobHref','jobDescribe','companyHref','term','termStr','jobTagsForOrder','jobSalaryMax','jobSalaryMin','isReprintJob','applyTimeText','jobReleaseType','coId','search_kw']
+            existing_columns = [col for col in expected_columns if col in df.columns]
+            df = df[existing_columns]
+
+            # 写入MySQL数据库        
+            # 读取数据库配置
+            mysql_config = config['mysql']
+            
+            # 创建数据库连接
+            engine = create_engine(
+                f"mysql+pymysql://{mysql_config['user']}:{mysql_config['password']}@{mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}?charset=utf8mb4"
+            )
+
+            # 将 list 类型字段转为字符串
+            list_columns = ['jobTags', 'hrLabels', 'jobTagsForOrder']
+            for col in list_columns:
+                if col in df.columns:
+                    df[col] = df[col].apply(lambda x: ','.join(x) if isinstance(x, list) else (str(x) if pd.notnull(x) else None))
+
+            # 处理薪资字段，空字符串转为 None，并转为 float
+            for col in ['jobSalaryMax', 'jobSalaryMin']:
+                if col in df.columns:
+                    df[col] = df[col].replace('', None)
+                    df[col] = df[col].astype(float)
+            
+            # 写入数据
+            df.to_sql('job_listings', con=engine, if_exists='append', index=False,chunksize=1000, method='multi')
+            logger.info(f"成功写入 {len(df)} 条数据到MySQL数据库, 关键词: {kw}")
+
 
             page += 1
 
             if page > max_page:
                 break
 
-            time.sleep(random.randint(1, 8))
+            time.sleep(random.randint(3, 15))
 
-        df = pd.DataFrame()
-        for page in result:
-            df = pd.concat([df,pd.DataFrame(data=page["resultbody"]["job"]["items"])],ignore_index=True)
-        df["search_kw"] = kw
 
-        df=df[['jobId','jobType','jobName','jobTags','workAreaCode','jobAreaCode','jobAreaString','hrefAreaPinYin','provideSalaryString','issueDateString','confirmDateString','workYear','workYearString','degreeString','industryType1','industryType2','industryType1Str','industryType2Str','major1Str','companyName','fullCompanyName','companyLogo','companyTypeString','companySizeString','companySizeCode','companyIndustryType1Str','companyIndustryType2Str','hrUid','hrName','smallHrLogoUrl','hrPosition','hrLabels','updateDateTime','lon','lat','jobHref','jobDescribe','companyHref','term','termStr','jobTagsForOrder','jobSalaryMax','jobSalaryMin','isReprintJob','applyTimeText','jobReleaseType','coId','search_kw']]
-
-        # 写入MySQL数据库        
-        # 读取数据库配置
-        mysql_config = config['mysql']
-        
-        # 创建数据库连接
-        engine = create_engine(
-            f"mysql+pymysql://{mysql_config['user']}:{mysql_config['password']}@{mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}?charset=utf8mb4"
-        )
-
-        # 将 list 类型字段转为字符串
-        list_columns = ['jobTags', 'hrLabels', 'jobTagsForOrder']
-        for col in list_columns:
-            if col in df.columns:
-                df[col] = df[col].apply(lambda x: ','.join(x) if isinstance(x, list) else (str(x) if pd.notnull(x) else None))
-
-        # 处理薪资字段，空字符串转为 None，并转为 float
-        for col in ['jobSalaryMax', 'jobSalaryMin']:
-            if col in df.columns:
-                df[col] = df[col].replace('', None)
-                df[col] = df[col].astype(float)
-        
-        # 写入数据
-        df.to_sql('job_listings', con=engine, if_exists='append', index=False,chunksize=1000, method='multi')
-        logger.info(f"成功写入 {len(df)} 条数据到MySQL数据库")
-
-        time.sleep(random.randint(1, 30))
+        time.sleep(random.randint(3, 30))
 
 
 timezone = pytz.timezone("Asia/Shanghai")
