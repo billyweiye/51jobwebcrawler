@@ -1,0 +1,176 @@
+# 日志配置文件
+
+version: 1
+disable_existing_loggers: false
+
+# 格式化器配置
+formatters:
+  # 详细格式 (用于文件日志)
+  detailed:
+    format: '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(funcName)s() - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+    
+  # 简单格式 (用于控制台)
+  simple:
+    format: '%(asctime)s - %(levelname)s - %(message)s'
+    datefmt: '%H:%M:%S'
+    
+  # JSON格式 (用于结构化日志)
+  json:
+    format: '%(asctime)s'
+    class: 'pythonjsonlogger.jsonlogger.JsonFormatter'
+    
+  # 错误格式 (包含异常信息)
+  error:
+    format: '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(funcName)s() - %(message)s\n%(exc_info)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+# 处理器配置
+handlers:
+  # 控制台处理器
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: simple
+    stream: ext://sys.stdout
+    
+  # 主日志文件 (所有级别)
+  file_all:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: ./logs/crawler.log
+    when: 'midnight'
+    interval: 1
+    backupCount: 30
+    encoding: utf-8
+    
+  # 错误日志文件
+  file_error:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: ERROR
+    formatter: error
+    filename: ./logs/error.log
+    when: 'midnight'
+    interval: 1
+    backupCount: 30
+    encoding: utf-8
+    
+  # 爬虫专用日志
+  file_crawler:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: INFO
+    formatter: detailed
+    filename: ./logs/crawler_activity.log
+    when: 'H'
+    interval: 6
+    backupCount: 28
+    encoding: utf-8
+    
+  # 数据库操作日志
+  file_database:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: INFO
+    formatter: detailed
+    filename: ./logs/database.log
+    when: 'midnight'
+    interval: 1
+    backupCount: 7
+    encoding: utf-8
+    
+  # 性能监控日志
+  file_performance:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: INFO
+    formatter: json
+    filename: ./logs/performance.log
+    when: 'H'
+    interval: 1
+    backupCount: 24
+    encoding: utf-8
+    
+  # 统计信息日志
+  file_stats:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: INFO
+    formatter: json
+    filename: ./logs/statistics.log
+    when: 'H'
+    interval: 1
+    backupCount: 168  # 一周
+    encoding: utf-8
+
+# 记录器配置
+loggers:
+  # 爬虫模块日志
+  crawler:
+    level: DEBUG
+    handlers: [console, file_crawler, file_error]
+    propagate: false
+    
+  # 数据库模块日志
+  database:
+    level: INFO
+    handlers: [file_database, file_error]
+    propagate: false
+    
+  # 网络请求日志
+  requests:
+    level: WARNING
+    handlers: [file_all]
+    propagate: false
+    
+  # urllib3日志 (requests底层)
+  urllib3:
+    level: WARNING
+    handlers: [file_all]
+    propagate: false
+    
+  # SQLAlchemy日志
+  sqlalchemy:
+    level: WARNING
+    handlers: [file_database]
+    propagate: false
+    
+  # 性能监控日志
+  performance:
+    level: INFO
+    handlers: [file_performance]
+    propagate: false
+    
+  # 统计信息日志
+  statistics:
+    level: INFO
+    handlers: [file_stats]
+    propagate: false
+    
+  # 调度器日志
+  scheduler:
+    level: INFO
+    handlers: [console, file_all, file_error]
+    propagate: false
+
+# 根记录器配置
+root:
+  level: INFO
+  handlers: [console, file_all, file_error]
+
+# 日志配置选项
+options:
+  # 是否捕获警告
+  capture_warnings: true
+  
+  # 日志目录自动创建
+  auto_create_dirs: true
+  
+  # 日志文件权限
+  file_permissions: 0o644
+  
+  # 最大日志文件大小 (MB)
+  max_file_size: 100
+  
+  # 日志压缩
+  compress_rotated: true
+  
+  # 异步日志 (提高性能)
+  async_logging: false

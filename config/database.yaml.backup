@@ -1,0 +1,114 @@
+# 数据库配置文件
+
+# MySQL配置
+mysql:
+  # 主数据库
+  primary:
+    host: "localhost"
+    port: 3306
+    database: "job_crawler"
+    username: "crawler_user"
+    password: "your_password_here"
+    charset: "utf8mb4"
+    
+    # 连接池配置
+    pool_size: 10
+    max_overflow: 20
+    pool_timeout: 30
+    pool_recycle: 3600
+    
+    # SSL配置
+    ssl_disabled: true
+    
+  # 只读副本 (可选)
+  replica:
+    enabled: false
+    host: "localhost"
+    port: 3307
+    database: "job_crawler"
+    username: "crawler_reader"
+    password: "your_password_here"
+    charset: "utf8mb4"
+    
+# PostgreSQL配置 (备选)
+postgresql:
+  enabled: false
+  host: "localhost"
+  port: 5432
+  database: "job_crawler"
+  username: "crawler_user"
+  password: "your_password_here"
+  
+  # 连接池配置
+  pool_size: 10
+  max_overflow: 20
+  
+# SQLite配置 (开发环境)
+sqlite:
+  enabled: true  # 启用SQLite用于本地测试
+  database_path: "./data/job_crawler.db"
+  
+# Redis配置 (缓存和队列)
+redis:
+  enabled: false
+  host: "localhost"
+  port: 6379
+  database: 0
+  password: ""
+  
+  # 连接池配置
+  max_connections: 50
+  
+  # 缓存配置
+  cache:
+    default_timeout: 3600
+    key_prefix: "51job_crawler:"
+    
+  # 队列配置
+  queue:
+    default_queue: "crawl_tasks"
+    result_ttl: 86400
+    
+# 数据表配置
+tables:
+  # 主表名
+  job_listings: "job_listings"
+  
+  # 统计表
+  crawl_stats: "crawl_statistics"
+  
+  # 错误日志表
+  error_logs: "error_logs"
+  
+  # 去重表
+  dedup_cache: "deduplication_cache"
+  
+# 数据库初始化
+initialization:
+  # 是否自动创建表
+  auto_create_tables: true
+  
+  # 是否执行数据迁移
+  auto_migrate: true
+  
+  # 初始化SQL文件路径
+  init_sql_path: "./sql/init.sql"
+  
+# 备份配置
+backup:
+  enabled: true
+  
+  # 备份类型: mysqldump, pg_dump, sqlite_backup
+  type: "mysqldump"
+  
+  # 备份路径
+  backup_path: "./data/backups"
+  
+  # 备份保留天数
+  retention_days: 7
+  
+  # 备份调度 (cron表达式)
+  schedule: "0 2 * * *"  # 每天凌晨2点
+  
+  # 压缩备份文件
+  compress: true

@@ -1,0 +1,137 @@
+# 51job爬虫系统配置文件
+
+# 爬虫基础配置
+crawler:
+  name: "51job-crawler"
+  version: "1.1.0"
+  user_agent_rotation: true
+  respect_robots_txt: true
+  
+# 请求配置
+request:
+  # 下载延迟配置
+  download_delay: 3  # 基础延迟秒数
+  randomize_delay: 0.5  # 随机延迟因子 (0.5 * to 1.5 * download_delay)
+  
+  # 超时配置
+  timeout: 30
+  connect_timeout: 10
+  
+  # 重试配置
+  retry_times: 3
+  retry_http_codes: [500, 502, 503, 504, 408, 429]
+  
+  # 并发配置
+  concurrent_requests: 8
+  concurrent_requests_per_domain: 2
+  
+# 目标网站配置
+target:
+  base_url: "https://51job.com/"
+  api_url: "https://we.51job.com/api/job/search-pc"
+  robots_url: "https://51job.com/robots.txt"
+  
+# 搜索配置
+search:
+  # 搜索关键词 (逗号分隔)
+  keywords: 
+    - "Python开发"
+    - "数据分析"
+    - "Java开发"
+    - "前端开发"
+  
+  # 搜索城市编码 (000000表示全国)
+  cities:
+    - "010000"  # 北京
+    - "020000"  # 上海
+    - "030000"  # 广东省
+    - "040000"  # 深圳
+  
+  # 分页配置
+  max_pages: 1
+  page_size: 20
+  
+  # 搜索间隔 (秒)
+  search_interval:
+    min: 5
+    max: 15
+    
+# 数据存储配置
+storage:
+  # 主存储类型: mysql, postgresql, sqlite
+  primary: "mysql"
+  
+  # 备份存储
+  backup_enabled: true
+  backup_formats: ["json", "csv"]
+  backup_path: "./data/backup"
+  
+  # 数据去重
+  deduplication:
+    enabled: true
+    key_fields: ["job_id"]
+    
+# 代理配置
+proxy:
+  enabled: false
+  rotation: true
+  # 代理列表文件路径
+  proxy_file: "./config/proxies.txt"
+  # 代理验证URL
+  test_url: "http://httpbin.org/ip"
+  # 代理超时时间
+  timeout: 10
+  
+# 用户代理配置
+user_agent:
+  rotation: true
+  # 用户代理列表文件路径
+  agents_file: "./config/user_agents.txt"
+  # 默认用户代理
+  default: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  
+# 任务调度配置
+scheduler:
+  enabled: true
+  # 调度类型: cron, interval
+  type: "cron"
+  
+  # Cron表达式 (每天18:00和21:30执行)
+  cron_jobs:
+    - cron: "0 18 * * *"  # 每天18:00
+      job: "full_crawl"
+    - cron: "30 21 * * *"  # 每天21:30
+      job: "incremental_crawl"
+      
+  # 时区设置
+  timezone: "Asia/Shanghai"
+  
+# 监控配置
+monitoring:
+  enabled: true
+  # 指标收集间隔 (秒)
+  metrics_interval: 60
+  
+  # 告警配置
+  alerts:
+    # 成功率低于阈值时告警
+    success_rate_threshold: 0.8
+    # 错误数量超过阈值时告警
+    error_count_threshold: 100
+    
+  # 统计信息
+  stats:
+    # 保留统计数据天数
+    retention_days: 30
+    
+# 开发配置
+development:
+  debug: false
+  # 测试模式 (限制爬取数量)
+  test_mode: false
+  test_limit: 100
+  
+  # 本地缓存
+  cache_enabled: true
+  cache_dir: "./data/cache"
+  cache_expire: 3600  # 缓存过期时间(秒)

@@ -1,0 +1,19 @@
+backup:
+  enabled: false
+initialization:
+  auto_create_tables: true
+  auto_migrate: true
+mysql:
+  enabled: false
+postgresql:
+  enabled: false
+redis:
+  enabled: false
+sqlite:
+  database_path: ./data/job_crawler.db
+  enabled: true
+tables:
+  crawl_stats: crawl_statistics
+  dedup_cache: deduplication_cache
+  error_logs: error_logs
+  job_listings: job_listings

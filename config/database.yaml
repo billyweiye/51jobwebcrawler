@@ -1,0 +1,62 @@
+backup:
+  backup_path: ./data/backups
+  compress: true
+  enabled: true
+  retention_days: 7
+  schedule: 0 2 * * *
+  type: mysqldump
+initialization:
+  auto_create_tables: true
+  auto_migrate: true
+  init_sql_path: ./sql/init.sql
+mysql:
+  enabled: false
+  primary:
+    charset: utf8mb4
+    database: job_crawler
+    host: localhost
+    max_overflow: 20
+    password: your_password_here
+    pool_recycle: 3600
+    pool_size: 10
+    pool_timeout: 30
+    port: 3306
+    username: crawler_user
+  replica:
+    charset: utf8mb4
+    database: job_crawler
+    enabled: false
+    host: localhost
+    password: your_password_here
+    port: 3307
+    username: crawler_reader
+postgresql:
+  database: job_crawler
+  enabled: false
+  host: localhost
+  max_overflow: 20
+  password: your_password_here
+  pool_size: 10
+  port: 5432
+  username: crawler_user
+redis:
+  cache:
+    default_timeout: 3600
+    key_prefix: '51job_crawler:'
+  database: 0
+  enabled: false
+  host: localhost
+  max_connections: 50
+  password: ''
+  port: 6379
+  queue:
+    default_queue: crawl_tasks
+    result_ttl: 86400
+sqlite:
+  database_path: ./data/job_crawler.db
+  enabled: true
+tables:
+  crawl_stats: crawl_statistics
+  dedup_cache: deduplication_cache
+  error_logs: error_logs
+  job_listings: job_listings
