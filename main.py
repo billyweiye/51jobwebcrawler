@@ -9,6 +9,8 @@ import pytz
 import datetime
 from sqlalchemy import create_engine
 from logging.handlers import TimedRotatingFileHandler
+from crawler_config import DELAY_CONFIG, RETRY_CONFIG, USER_AGENTS, DATA_VALIDATION
+from crawler_monitor import monitor
 
 
 # 配置日志记录器
@@ -89,6 +91,9 @@ def search():
             "NSC_ohjoy-bmjzvo-200-159": "ffffffffc3a0d42e45525d5f4f58455e445a4a423660",
         }
 
+        # 随机选择User-Agent
+        selected_ua = random.choice(USER_AGENTS)
+        
         headers = {
             "Accept": "application/json,text/plain,*/*",
             "Accept-Encoding": "gzip,deflate,br,zstd",
@@ -101,7 +106,7 @@ def search():
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
-            "User-Agent": "Mozilla/5.0(Macintosh;IntelMacOSX10_15_7)AppleWebKit/537.36(KHTML,likeGecko)Chrome/123.0.0.0Safari/537.36",
+            "User-Agent": selected_ua,
             "account-id": "",
             "partner": "",
             "property": "%7B%22partner%22%3A%22%22%2C%22webId%22%3A2%2C%22fromdomain%22%3A%2251job_web%22%2C%22frompageUrl%22%3A%22https%3A%2F%2Fwe.51job.com%2F%22%2C%22pageUrl%22%3A%22https%3A%2F%2Fwe.51job.com%2Fpc%2Fsearch%3FjobArea%3D000000%26keyword%3D%25E6%2595%25B0%25E6%258D%25AE%25E5%2588%2586%25E6%259E%2590%26searchType%3D2%22%2C%22identityType%22%3A%22%22%2C%22userType%22%3A%22%22%2C%22isLogin%22%3A%22%E5%90%A6%22%2C%22accountid%22%3A%22%22%2C%22keywordType%22%3A%22%22%7D",
@@ -155,14 +160,25 @@ def search():
                         res_json = jobs.get_jobs_json(params=user_params)
                     except Exception as e:
                         logger.error(f"请求接口异常: {e}, params: {user_params}")
+                        monitor.record_request(success=False, error_type=f"request_exception_{type(e).__name__}")
+                        # 遇到异常时增加延时，避免频繁请求
+                        time.sleep(random.uniform(*DELAY_CONFIG['retry_delay_base']))
                         break
 
                     if res_json and isinstance(res_json, dict):
                         if res_json.get("resultbody", {}).get("job", {}).get("items"):
                             result.append(res_json)
-                            logger.info(f"成功获取 {len(res_json['resultbody']['job']['items'])} 条数据, 关键词: {kw}, 页码: {page}")
+                            jobs_count = len(res_json['resultbody']['job']['items'])
+                            monitor.record_request(success=True, jobs_count=jobs_count)
+                            logger.info(f"成功获取 {jobs_count} 条数据, 关键词: {kw}, 页码: {page}")
                         else:
                             logger.warning(f"无数据返回: {res_json}")
+                            monitor.record_request(success=True, jobs_count=0)  # 记录空响应
+                            # 如果是第一页就无数据，可能是被反爬虫了，增加延时
+                            if page == 1:
+                                logger.warning("第一页就无数据，可能触发反爬虫机制，增加延时")
+                                monitor.record_request(success=False, error_type="anti_spider_suspected")
+                                time.sleep(random.uniform(*DELAY_CONFIG['anti_spider_delay']))
                             break
                     else:
                         logger.error(f"获取数据失败: {res_json}, params: {user_params}")
@@ -211,12 +227,33 @@ def search():
                         logger.info(f"关键词: {kw} 城市： {city} 达到最大页数 {max_page}，结束抓取")
                         break
 
-                    sleep_time = random.randint(3, 15)
+                    # 每次抓取后随机休眠，根据页数动态调整延时
+                    base_delay = random.uniform(*DELAY_CONFIG['base_page_delay'])
+                    if page > 10:  # 页数较多时增加延时
+                        base_delay += random.uniform(*DELAY_CONFIG['high_page_delay'])
+                    sleep_time = int(base_delay)
                     logger.info(f"关键词: {kw} 城市： {city}，第 {page-1} 页抓取完成，休眠 {sleep_time} 秒")
                     time.sleep(sleep_time)
-                sleep_time=random.randint(3, 30)
+                # 记录城市任务完成情况
+                if len(result) > 0:
+                    monitor.record_city_completion(success=True)
+                    logger.info(f"城市 {province_codes.get(city, city)} 关键词 {kw} 任务完成，共获取 {len(result)} 条数据")
+                else:
+                    monitor.record_city_completion(success=False)
+                    logger.warning(f"城市 {province_codes.get(city, city)} 关键词 {kw} 任务失败，未获取到数据")
+                
+                # 每个城市/关键词任务完成后休眠，根据数据量动态调整
+                city_delay = random.uniform(*DELAY_CONFIG['city_task_delay'])
+                if len(result) == 0:  # 如果没有获取到数据，增加更长延时
+                    city_delay += random.uniform(*DELAY_CONFIG['no_data_penalty'])
+                    logger.warning(f"城市 {province_codes.get(city, city)} 关键词 {kw} 未获取到数据，增加延时")
+                sleep_time = int(city_delay)
                 logger.info(f"关键词: {kw} 城市： {city}  抓取任务完成，休眠 {sleep_time} 秒")
                 time.sleep(sleep_time)
+                
+                # 每完成5个城市任务后生成监控报告
+                if (monitor.stats['cities_completed'] + monitor.stats['cities_failed']) % 5 == 0:
+                    monitor.log_report()
             sleep_time=random.randint(3, 30)
             logger.info(f"关键词: {kw} 的所有城市搜索任务已完成，休眠 {sleep_time} 秒")
             time.sleep(sleep_time)
@@ -239,11 +276,29 @@ night_minute = random.randint(0, 59)
 night_time = f"{night_hour:02d}:{night_minute:02d}"
 logger.info(f"next running time (night): {night_time}")
 
+def scheduled_search():
+    logger.info("开始执行搜索任务")
+    try:
+        search()
+    except Exception as e:
+        logger.error(f"搜索任务执行异常: {e}")
+        monitor.record_request(success=False, error_type=f"search_task_exception_{type(e).__name__}")
+    finally:
+        # 任务结束时生成最终报告
+        monitor.log_report()
+        # 保存详细报告到文件
+        report_file = f"logs/crawler_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        try:
+            monitor.save_report(report_file)
+            logger.info(f"监控报告已保存到: {report_file}")
+        except Exception as e:
+            logger.error(f"保存监控报告失败: {e}")
+
 # 在每天下午6-9点之间的随机时间点启动任务
 scheduler = schedule.Scheduler()
-scheduler.every().day.at(random_time, timezone).do(search)
+scheduler.every().day.at(random_time, timezone).do(scheduled_search)
 # 在每天晚上21-22点之间的随机时间点启动任务
-scheduler.every().day.at(night_time, timezone).do(search)
+scheduler.every().day.at(night_time, timezone).do(scheduled_search)
 
 logger.info("程序启动，配置定时任务")
 
