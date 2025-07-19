@@ -7,27 +7,32 @@ import configparser
 import schedule
 import pytz
 import datetime
+import os
 from sqlalchemy import create_engine
 from logging.handlers import TimedRotatingFileHandler
 from crawler_config import DELAY_CONFIG, RETRY_CONFIG, USER_AGENTS, DATA_VALIDATION
 from crawler_monitor import monitor
+from database_manager import DatabaseManager
+from auth_manager import get_auth_manager
 
 
-# 配置日志记录器
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+# 配置根日志记录器，确保所有模块的日志都能输出到文件
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
 
 # 创建 TimedRotatingFileHandler，每 6 小时滚动一次日志文件
 log_handler = TimedRotatingFileHandler('app.log', when='H', interval=6, backupCount=4)
 log_handler.setLevel(logging.DEBUG)
 
-
 # 配置日志格式
 log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 log_handler.setFormatter(log_formatter)
 
-# 添加处理器到记录器
-logger.addHandler(log_handler)
+# 添加处理器到根记录器，这样所有模块的日志都会输出到文件
+root_logger.addHandler(log_handler)
+
+# 获取当前模块的logger
+logger = logging.getLogger(__name__)
 
 # 省级代码
 province_codes = {
@@ -83,40 +88,9 @@ def search():
 
         url = "https://we.51job.com/api/job/search-pc"
 
-        initial_cookies = {
-            "privacy": str(int(time.time())),
-            "guid": "21ae369c1fecc95608a454bacdd16b41",
-            "acw_tc": "ac11000117130121464015687e00d6b80852550fe03e0fd08cf69bf654d5a3",
-            "JSESSIONID": "2F0AFC4C5819D899810516F3424C7A87",
-            "NSC_ohjoy-bmjzvo-200-159": "ffffffffc3a0d42e45525d5f4f58455e445a4a423660",
-        }
-
-        # 随机选择User-Agent
-        selected_ua = random.choice(USER_AGENTS)
-        
-        headers = {
-            "Accept": "application/json,text/plain,*/*",
-            "Accept-Encoding": "gzip,deflate,br,zstd",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Connection": "keep-alive",
-            "DNT": "1",
-            "From-Domain": "51job_web",
-            "Host": "we.51job.com",
-            "Referer": "https://we.51job.com/pc/search?jobArea=000000&keyword=%E6%95%B0%E6%8D%AE%E5%88%86%E6%9E%90&searchType=2",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "User-Agent": selected_ua,
-            "account-id": "",
-            "partner": "",
-            "property": "%7B%22partner%22%3A%22%22%2C%22webId%22%3A2%2C%22fromdomain%22%3A%2251job_web%22%2C%22frompageUrl%22%3A%22https%3A%2F%2Fwe.51job.com%2F%22%2C%22pageUrl%22%3A%22https%3A%2F%2Fwe.51job.com%2Fpc%2Fsearch%3FjobArea%3D000000%26keyword%3D%25E6%2595%25B0%25E6%258D%25AE%25E5%2588%2586%25E6%259E%2590%26searchType%3D2%22%2C%22identityType%22%3A%22%22%2C%22userType%22%3A%22%22%2C%22isLogin%22%3A%22%E5%90%A6%22%2C%22accountid%22%3A%22%22%2C%22keywordType%22%3A%22%22%7D",
-            "sec-ch-ua": '"GoogleChrome";v="123","Not:A-Brand";v="8","Chromium";v="123"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"macOS"',
-            "sign": "f858c5f418f30e4dd65f3c7f86d03a8e87e87302695161c82a9b37f04d790287",
-            "user-token": "",
-            "uuid": "21ae369c1fecc95608a454bacdd16b4",
-        }
+        # 获取认证管理器实例
+        auth_manager = get_auth_manager()
+        logger.info("认证管理器已准备就绪，将为每个搜索任务动态生成认证信息")
 
         for kw in kws:
             for city in cities:
@@ -124,8 +98,14 @@ def search():
                 result = []
                 page = 1
                 max_page = config.getint("job_search", "max_page", fallback=10)
+                
+                # 为当前搜索任务获取动态认证信息
+                auth_info = auth_manager.get_current_auth_info(keyword=kw, job_area=city)
+                headers = auth_info['headers']
+                cookies = auth_info['cookies']
+                logger.info(f"为关键词 {kw} 地区 {city} 生成动态认证信息")
 
-                jobs = JobSearch(url, initial_cookies, headers)
+                jobs = JobSearch(url, headers, cookies)
 
                 while True:
                     logger.info(f"正在抓取第 {page} 页")
@@ -147,13 +127,15 @@ def search():
                         "companySize": "",
                         "jobType": "",
                         "issueDate": "",
-                        "sortType": "1",
+                        "sortType": "1",  # 改为0，与浏览器请求一致
                         "pageNum": page,
+                        "requestId": "",  # 新增requestId参数
+                        "keywordType": "",  # 新增keywordType参数
                         "pageSize": "20",
                         "source": "1",
-                        "accountId": "",
+                        "accountId": "96938878",
                         "pageCode": "sou%7Csou%7Csoulb",
-                        "userLonLat": "",
+                        "scene": "7"  # 保持scene参数
                     }
 
                     try:
@@ -192,15 +174,7 @@ def search():
                     existing_columns = [col for col in expected_columns if col in df.columns]
                     df = df[existing_columns]
 
-                    mysql_config = config['mysql']
-                    try:
-                        engine = create_engine(
-                            f"mysql+pymysql://{mysql_config['user']}:{mysql_config['password']}@{mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}?charset=utf8mb4"
-                        )
-                    except Exception as e:
-                        logger.error(f"数据库连接失败: {e}")
-                        break
-
+                    # 数据预处理
                     list_columns = ['jobTags', 'hrLabels', 'jobTagsForOrder']
                     for col in list_columns:
                         if col in df.columns:
@@ -214,12 +188,24 @@ def search():
                             except Exception as e:
                                 logger.warning(f"薪资字段转换异常: {e}")
 
+                    # 数据库操作 - 使用DatabaseManager
+                    mysql_config = config['mysql']
                     try:
-                        df.to_sql('job_listings', con=engine, if_exists='append', index=False, chunksize=1000, method='multi')
-                        logger.info(f"成功写入 {len(df)} 条数据到MySQL数据库, 关键词: {kw}, 页码: {page}")
+                        # 使用DatabaseManager保存数据，启用重试机制
+                        db_manager = DatabaseManager(mysql_config)
+                        success = db_manager.save_dataframe(df, 'job_listings', if_exists='append', max_retries=5)
+                        
+                        if success:
+                            logger.info(f"成功写入 {len(df)} 条数据到MySQL数据库, 关键词: {kw}, 页码: {page}")
+                        else:
+                            logger.error("数据库保存失败，跳过当前页面数据")
+                            # 数据库保存失败时不中断整个抓取流程，继续下一页
+                            monitor.record_request(success=False, error_type="database_save_failed")
+                        
                     except Exception as e:
-                        logger.error(f"写入数据库失败: {e}")
-                        break
+                        logger.error(f"数据库操作异常: {e}，跳过当前页面数据")
+                        monitor.record_request(success=False, error_type=f"database_exception_{type(e).__name__}")
+                        # 数据库异常时不中断整个抓取流程，继续下一页
 
                     page += 1
 
@@ -286,8 +272,17 @@ def scheduled_search():
     finally:
         # 任务结束时生成最终报告
         monitor.log_report()
+        # 检查是否存在logs文件夹，如果不存在则创建
+        logs_dir = 'logs'
+        if not os.path.exists(logs_dir):
+            try:
+                os.makedirs(logs_dir)
+                logger.info(f"创建logs目录: {logs_dir}")
+            except Exception as e:
+                logger.error(f"创建logs目录失败: {e}")
+                return
         # 保存详细报告到文件
-        report_file = f"logs/crawler_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        report_file = f"{logs_dir}/crawler_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         try:
             monitor.save_report(report_file)
             logger.info(f"监控报告已保存到: {report_file}")
@@ -301,6 +296,11 @@ scheduler.every().day.at(random_time, timezone).do(scheduled_search)
 scheduler.every().day.at(night_time, timezone).do(scheduled_search)
 
 logger.info("程序启动，配置定时任务")
+
+# 启动认证管理器的自动更新功能
+auth_manager = get_auth_manager()
+auth_manager.start_auto_update()
+logger.info("认证管理器自动更新已启动")
 
 while True:
     try:
