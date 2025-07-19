@@ -40,6 +40,14 @@ logs/*
 *auth*config*
 *api*key*
 
+# 环境配置文件
+environment.yml
+environment.yaml
+
+# 允许配置文件模板
+!config.ini.example
+!*.example
+
 # 阿里云相关敏感信息
 *aliyun*
 *rds*

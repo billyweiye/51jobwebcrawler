@@ -1,0 +1,48 @@
+# 51Job爬虫配置文件模板
+# 复制此文件为 config.ini 并填入真实配置信息
+
+[mysql]
+# MySQL数据库配置
+host = localhost
+port = 3306
+user = your_username
+password = your_password
+database = your_database_name
+
+[crawler]
+# 爬虫配置
+# 搜索关键词，用逗号分隔
+keywords = 数据分析师,Python开发,机器学习,前端开发,后端开发
+
+# 城市代码，用逗号分隔
+# 常用城市代码：
+# 北京: 010000
+# 上海: 020000  
+# 广州: 030200
+# 深圳: 040000
+# 杭州: 080200
+# 成都: 090200
+cities = 020000,010000,030200
+
+# 每个关键词+城市组合的最大抓取页数
+max_pages = 10
+
+# 请求延时范围（秒），格式：最小值,最大值
+delay_range = 1,3
+
+# 每页数据量
+page_size = 20
+
+[auth]
+# 认证配置（可选）
+# 如果需要特定的账户ID，在这里配置
+# account_id = your_account_id
+
+[logging]
+# 日志配置
+log_level = INFO
+log_file = app.log
+# 日志轮转配置：小时数
+log_rotation_hours = 6
+# 保留的日志备份数量
+log_backup_count = 4
