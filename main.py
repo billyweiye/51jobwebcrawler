@@ -258,7 +258,7 @@ random_time = f"{random_hour:02d}:{random_minute:02d}"
 logger.info(f"next running time (evening): {random_time}")
 
 # 新增：随机生成每天晚上21-22点之间的一个时间点
-night_hour = random.randint(21, 22)
+night_hour = random.randint(20, 23)
 night_minute = random.randint(0, 59)
 night_time = f"{night_hour:02d}:{night_minute:02d}"
 logger.info(f"next running time (night): {night_time}")
