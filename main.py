@@ -81,6 +81,7 @@ def search():
 
         kws = config["job_search"]["kws"].split(",")
         cities = config["job_search"]["cities"].split(",")
+        account_id=config["job_search"]['account_id']
 
         if '000000' in cities:
             logger.info("检测到全省搜索，使用所有省级代码")
@@ -133,7 +134,7 @@ def search():
                         "keywordType": "",  # 新增keywordType参数
                         "pageSize": "20",
                         "source": "1",
-                        "accountId": "96938878",
+                        "accountId": account_id,
                         "pageCode": "sou%7Csou%7Csoulb",
                         "scene": "7"  # 保持scene参数
                     }

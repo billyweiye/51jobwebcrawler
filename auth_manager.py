@@ -8,8 +8,14 @@ from cookie_manager import CookieManager
 import requests
 import json
 import urllib.parse
+import configparser
 
 logger = logging.getLogger(__name__)
+
+config = configparser.ConfigParser()
+config.read("config.ini",encoding='utf-8')
+
+account_id=config['job_search']['account_id']
 
 class AuthManager:
     """认证信息管理器，负责定时更新登录状态和认证信息"""
@@ -63,7 +69,7 @@ class AuthManager:
                 "identityType": "",
                 "userType": "",
                 "isLogin": "是",
-                "accountid": "96938878",
+                "accountid": account_id,
                 "keywordType": ""
             }
             
@@ -141,7 +147,7 @@ class AuthManager:
                 "Sec-Fetch-Mode": "cors",
                 "Sec-Fetch-Site": "same-origin",
                 "User-Agent": selected_ua,
-                "account-id": "96938878",
+                "account-id": account_id,
                 "partner": "",
                 "property": self.get_fresh_property_value(page_url, keyword, job_area),
                 "sec-ch-ua": '"Google Chrome";v="131","Chromium";v="131","Not_A Brand";v="24"',

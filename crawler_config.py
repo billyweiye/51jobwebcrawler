@@ -46,5 +46,5 @@ LOG_CONFIG = {
 # 数据库配置
 DB_CONFIG = {
     'batch_size': 1000,  # 批量插入大小
-    'connection_retry': 3,  # 数据库连接重试次数
+    'connection_retry': 5,  # 数据库连接重试次数
 }

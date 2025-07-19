@@ -1,29 +1,88 @@
+# 测试文件
 test.json
 test.ipynb
-__pycache__/acwCookie.cpython-312.pyc
-__pycache__/acwCookie.cpython-313.pyc
-__pycache__/feishu_doc.cpython-312.pyc
-__pycache__/feishu_doc.cpython-313.pyc
-__pycache__/jobSearch.cpython-312.pyc
-__pycache__/jobSearch.cpython-313.pyc
-supervisorctl.conf
-data analyst.csv
-data analyst_1717083677.210947.csv
-config.ini
-app.log.2024-09-11_21
-app.log.2024-08-02_22
-app.log.2024-08-02_00
-app.log.2024-07-06_16
-app.log
-安集微电子有限公司.csv
-安集微电子.csv
-51job.ipynb
-.DS_Store
 test.py
-app.log.2025-03-04_22
-/test
+test_*.py
+demo_*.py
+
+# Python缓存文件
+__pycache__/
 *.pyc
-/archives
-*.sql
+*.pyo
+*.pyd
 __pycache__/*
+
+# 配置文件（包含敏感信息）
+config.ini
+*.conf
+*.config
+
+# 数据文件
+*.csv
+*.json
+*.sql
+*.db
+*.sqlite
+*.sqlite3
+
+# 日志文件
+*.log
+*.log.*
+app.log*
+logs/
+logs/*
+*.out
+
+# 敏感信息和配置文件
+*secret*
+*password*
+*credential*
+*auth*config*
+*api*key*
+
+# 阿里云相关敏感信息
+*aliyun*
+*rds*
+*oss*
+
+# 数据库相关敏感文件
+*database*config*
+*db*config*
+*mysql*config*
+
+# 硬编码敏感信息
+*accountId*
+*account_id*
+
+# 归档文件
+/archives
+/test
+
+# IDE和编辑器文件
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .trae
+
+# 环境变量文件
+.env
+.env.local
+.env.*.local
+
+# 备份文件
+*.bak
+*.backup
+*.tmp
+
+# 系统文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 特定的敏感文件
+supervisorctl.conf
+demo_auth_manager.py
+monitor_database.py
