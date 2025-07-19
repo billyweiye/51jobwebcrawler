@@ -169,13 +169,6 @@ db_manager = DatabaseManager(mysql_config)
 success = db_manager.save_dataframe(df, 'job_listings', if_exists='append')
 ```
 
-## 🛡️ 安全说明
-
-- 所有敏感配置信息请存放在 `config.ini` 文件中
-- 不要将包含真实数据库密码的配置文件提交到版本控制
-- 建议在生产环境中使用环境变量管理敏感信息
-- 详细安全指南请参考 [SECURITY_CHECKLIST.md](SECURITY_CHECKLIST.md)
-
 ## 📝 日志
 
 程序运行时会生成详细的日志文件：
