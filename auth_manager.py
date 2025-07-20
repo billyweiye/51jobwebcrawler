@@ -257,7 +257,7 @@ class AuthManager:
         }
 
 # 全局认证管理器实例
-auth_manager = AuthManager(update_interval_hours=2)
+auth_manager = AuthManager(update_interval_hours=12)
 
 def get_auth_manager():
     """获取全局认证管理器实例"""
