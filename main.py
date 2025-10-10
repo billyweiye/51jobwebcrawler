@@ -9,11 +9,12 @@ import configparser
 import schedule
 import pytz
 import datetime
+import json
 import os
 import sys
 from sqlalchemy import create_engine
 from logging.handlers import TimedRotatingFileHandler
-from crawler_config import DELAY_CONFIG, RETRY_CONFIG, USER_AGENTS, DATA_VALIDATION
+from crawler_config import DELAY_CONFIG, RETRY_CONFIG, USER_AGENTS, DATA_VALIDATION, FAILED_CITY_RETRY
 from crawler_monitor import monitor
 from database_manager import DatabaseManager
 from auth_manager import get_auth_manager
@@ -64,32 +65,32 @@ province_codes = {
     "040000": "深圳",
     "050000": "天津",
     "060000": "重庆",
-    # "070000": "江苏省",
-    # "080000": "浙江省",
-    # "090000": "四川省",
-    # "100000": "海南省",
-    # "110000": "福建省",
-    # "120000": "山东省",
-    # "130000": "江西省",
-    # "140000": "广西",
-    # "150000": "安徽省",
-    # "160000": "河北省",
-    # "170000": "河南省",
-    # "180000": "湖北省",
-    # "190000": "湖南省",
-    # "200000": "陕西省",
-    # "210000": "山西省",
-    # "220000": "黑龙江省",
-    # "230000": "辽宁省",
-    # "240000": "吉林省",
-    # "250000": "云南省",
-    # "260000": "贵州省",
-    # "270000": "甘肃省",
-    # "280000": "内蒙古",
-    # "290000": "宁夏",
-    # "300000": "西藏",
-    # "310000": "新疆",
-    # "320000": "青海省" 
+    "070000": "江苏省",
+    "080000": "浙江省",
+    "090000": "四川省",
+    "100000": "海南省",
+    "110000": "福建省",
+    "120000": "山东省",
+    "130000": "江西省",
+    "140000": "广西",
+    "150000": "安徽省",
+    "160000": "河北省",
+    "170000": "河南省",
+    "180000": "湖北省",
+    "190000": "湖南省",
+    "200000": "陕西省",
+    "210000": "山西省",
+    "220000": "黑龙江省",
+    "230000": "辽宁省",
+    "240000": "吉林省",
+    "250000": "云南省",
+    "260000": "贵州省",
+    "270000": "甘肃省",
+    "280000": "内蒙古",
+    "290000": "宁夏",
+    "300000": "西藏",
+    "310000": "新疆",
+    "320000": "青海省" 
     }
 
 # 读取配置文件
@@ -120,18 +121,111 @@ if config.has_section('city_max_pages'):
         logger.error("读取城市最大页数配置时发生未知错误")
 
 
-def search():
+# 失败城市日志文件路径与工具函数
+FAILED_CITY_LOG = os.path.join('logs', 'failed_cities.json')
+
+def _ensure_logs_dir():
+    try:
+        if not os.path.exists('logs'):
+            os.makedirs('logs')
+            logger.info("创建logs目录: logs")
+    except Exception as e:
+        logger.error(f"创建logs目录失败: {e}")
+
+def _read_failed_log():
+    _ensure_logs_dir()
+    try:
+        if os.path.exists(FAILED_CITY_LOG):
+            with open(FAILED_CITY_LOG, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        logger.warning(f"读取失败城市日志失败，将重置。错误: {e}")
+    return {"cities": {}, "meta": {"created_at": datetime.datetime.now().isoformat()}}
+
+def _write_failed_log(data):
+    _ensure_logs_dir()
+    try:
+        data.setdefault("meta", {})
+        data["meta"]["updated_at"] = datetime.datetime.now().isoformat()
+        with open(FAILED_CITY_LOG, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"写入失败城市日志失败: {e}")
+
+def record_failed_city(city_code, reason="no_data"):
+    try:
+        data = _read_failed_log()
+        cities = data.setdefault("cities", {})
+        entry = cities.get(city_code, {
+            "name": province_codes.get(city_code, city_code),
+            "retries": 0,
+            "status": "failed",
+            "succeeded_once": False
+        })
+        # 如果已经成功过，则不再将状态改回失败
+        if not entry.get("succeeded_once", False):
+            entry["status"] = "failed"
+            entry["last_failed_at"] = datetime.datetime.now().isoformat()
+            entry["reason"] = reason
+        cities[city_code] = entry
+        _write_failed_log(data)
+        logger.info(f"记录失败城市: {province_codes.get(city_code, city_code)}")
+    except Exception as e:
+        logger.error(f"记录失败城市发生异常: {e}")
+
+def mark_city_retry_success(city_code):
+    try:
+        data = _read_failed_log()
+        cities = data.setdefault("cities", {})
+        entry = cities.get(city_code)
+        if not entry:
+            entry = {
+                "name": province_codes.get(city_code, city_code),
+                "retries": 0,
+            }
+        entry["status"] = "succeeded"
+        entry["succeeded_once"] = True
+        entry["last_succeeded_at"] = datetime.datetime.now().isoformat()
+        cities[city_code] = entry
+        _write_failed_log(data)
+        logger.info(f"标记城市成功: {province_codes.get(city_code, city_code)}")
+    except Exception as e:
+        logger.error(f"标记城市成功发生异常: {e}")
+
+def get_failed_city_codes():
+    try:
+        data = _read_failed_log()
+        return [code for code, ent in data.get("cities", {}).items() if ent.get("status") == "failed"]
+    except Exception:
+        return []
+
+def increment_city_retry(city_code):
+    try:
+        data = _read_failed_log()
+        cities = data.setdefault("cities", {})
+        entry = cities.get(city_code)
+        if not entry:
+            entry = {"name": province_codes.get(city_code, city_code), "retries": 0, "status": "failed"}
+        entry["retries"] = int(entry.get("retries", 0)) + 1
+        entry["last_retry_at"] = datetime.datetime.now().isoformat()
+        cities[city_code] = entry
+        _write_failed_log(data)
+    except Exception as e:
+        logger.warning(f"更新重试计数失败: {e}")
+
+
+def search(override_kws=None, override_cities=None):
     try:
         logger.info("开始一次新的搜索任务")
         t_search_start = time.perf_counter()
 
-        kws = config["job_search"]["kws"].split(",")
-        cities = config["job_search"]["cities"].split(",")
+        kws = override_kws if override_kws else config["job_search"]["kws"].split(",")
+        cities = override_cities if override_cities else config["job_search"]["cities"].split(",")
         account_id=config["job_search"]['account_id']
         if is_run_once_mode():
             logger.debug(f"配置解析: kws={kws}, cities={cities}, account_id={account_id} (type={type(account_id).__name__})")
 
-        if '000000' in cities:
+        if '000000' in cities and not override_cities:
             logger.info("检测到全省搜索，使用所有省级代码")
             cities = list(province_codes.keys())
             if is_run_once_mode():
@@ -337,9 +431,13 @@ def search():
                 if total_jobs > 0:
                     monitor.record_city_completion(success=True)
                     logger.info(f"城市 {province_codes.get(city, city)} 关键词 {kw} 任务完成，共获取 {total_jobs} 条数据")
+                    # 标记该城市已成功，避免被视为失败
+                    mark_city_retry_success(city)
                 else:
                     monitor.record_city_completion(success=False)
                     logger.warning(f"城市 {province_codes.get(city, city)} 关键词 {kw} 任务失败，未获取到数据")
+                    # 记录失败城市，供后续重试
+                    record_failed_city(city, reason="no_data")
                 if is_run_once_mode():
                     t_pair_elapsed = time.perf_counter() - t_pair_start
                     logger.debug(f"关键词/城市任务耗时: {t_pair_elapsed:.3f}s, 处理页数={pages_processed}, 总数据量={total_jobs}")
@@ -421,6 +519,36 @@ def scheduled_search():
             logger.info(f"监控报告已保存到: {report_file}")
         except Exception as e:
             logger.error(f"保存监控报告失败: {e}")
+        # 主任务完成后，对失败城市进行重试
+        try:
+            failed_cities = get_failed_city_codes()
+            if failed_cities:
+                rest_minutes = int(FAILED_CITY_RETRY.get('rest_minutes', 15))
+                max_rounds = int(FAILED_CITY_RETRY.get('max_rounds', 2))
+                logger.info(f"检测到失败城市: {failed_cities}，休眠 {rest_minutes} 分钟后开始重试")
+                time.sleep(rest_minutes * 60)
+                for round_idx in range(1, max_rounds + 1):
+                    failed_cities = get_failed_city_codes()
+                    if not failed_cities:
+                        logger.info("所有失败城市已在前一轮重试中成功，结束重试流程")
+                        break
+                    logger.info(f"开始失败城市第 {round_idx}/{max_rounds} 轮重试: {failed_cities}")
+                    # 更新重试次数
+                    for c in failed_cities:
+                        increment_city_retry(c)
+                    # 针对失败城市重新执行抓取（使用原有关键词配置）
+                    try:
+                        search(override_cities=failed_cities)
+                    except Exception as e:
+                        logger.error(f"第 {round_idx} 轮重试执行异常: {e}")
+                    # 每轮重试之间适当休眠，避免过于频繁
+                    mid_delay = random.uniform(*DELAY_CONFIG['city_task_delay'])
+                    logger.info(f"第 {round_idx} 轮重试完成，休眠 {int(mid_delay)} 秒")
+                    time.sleep(int(mid_delay))
+            else:
+                logger.info("本次任务无失败城市，无需重试")
+        except Exception as e:
+            logger.error(f"失败城市重试流程异常: {e}")
         finally:
             # 释放数据库引擎资源
             try:
