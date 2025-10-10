@@ -1,4 +1,6 @@
 import time
+import os
+import re
 import pandas as pd
 import random
 from jobSearch import JobSearch
@@ -7,10 +9,12 @@ import configparser
 import schedule
 import pytz
 import datetime
+import json
 import os
+import sys
 from sqlalchemy import create_engine
 from logging.handlers import TimedRotatingFileHandler
-from crawler_config import DELAY_CONFIG, RETRY_CONFIG, USER_AGENTS, DATA_VALIDATION
+from crawler_config import DELAY_CONFIG, RETRY_CONFIG, USER_AGENTS, DATA_VALIDATION, FAILED_CITY_RETRY
 from crawler_monitor import monitor
 from database_manager import DatabaseManager
 from auth_manager import get_auth_manager
@@ -33,6 +37,25 @@ root_logger.addHandler(log_handler)
 
 # 获取当前模块的logger
 logger = logging.getLogger(__name__)
+
+# 运行模式判断与调试开关
+def is_run_once_mode():
+    return 'run_once' in sys.argv[1:]
+
+def enable_debug_logging():
+    # 提升到DEBUG级别并增加控制台输出以便调试
+    rl = logging.getLogger()
+    rl.setLevel(logging.DEBUG)
+    for h in rl.handlers:
+        h.setLevel(logging.DEBUG)
+    # 避免重复添加控制台处理器
+    has_stream = any(isinstance(h, logging.StreamHandler) for h in rl.handlers)
+    if not has_stream:
+        sh = logging.StreamHandler()
+        sh.setLevel(logging.DEBUG)
+        sh.setFormatter(log_formatter)
+        rl.addHandler(sh)
+    logger.debug("Debug logging enabled (run_once mode)")
 
 # 省级代码
 province_codes = {
@@ -74,18 +97,139 @@ province_codes = {
 config = configparser.ConfigParser()
 config.read("config.ini",encoding='utf-8')
 
+# 初始化持久化数据库管理器（模块级，供整个任务复用）
+db_manager = DatabaseManager(config['mysql'])
 
-def search():
+# 城市抓取页数配置解析
+default_max_page = config.getint('job_search', 'max_page', fallback=10)
+city_max_pages = {}
+if config.has_section('city_max_pages'):
+    try:
+        for k, v in config.items('city_max_pages'):
+            key_lower = k.lower().strip()
+            if key_lower in ('default', '*'):
+                try:
+                    default_max_page = config.getint('city_max_pages', k)
+                except Exception:
+                    logger.error(f"读取默认最大页数配置失败，使用默认值 {default_max_page}")
+            else:
+                try:
+                    city_max_pages[k.strip()] = int(v)
+                except Exception:
+                    logger.error(f"读取城市 {k.strip()} 最大页数配置失败，使用默认值 {default_max_page}")
+    except Exception:
+        logger.error("读取城市最大页数配置时发生未知错误")
+
+
+# 失败城市日志文件路径与工具函数
+FAILED_CITY_LOG = os.path.join('logs', 'failed_cities.json')
+
+def _ensure_logs_dir():
+    try:
+        if not os.path.exists('logs'):
+            os.makedirs('logs')
+            logger.info("创建logs目录: logs")
+    except Exception as e:
+        logger.error(f"创建logs目录失败: {e}")
+
+def _read_failed_log():
+    _ensure_logs_dir()
+    try:
+        if os.path.exists(FAILED_CITY_LOG):
+            with open(FAILED_CITY_LOG, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        logger.warning(f"读取失败城市日志失败，将重置。错误: {e}")
+    return {"cities": {}, "meta": {"created_at": datetime.datetime.now().isoformat()}}
+
+def _write_failed_log(data):
+    _ensure_logs_dir()
+    try:
+        data.setdefault("meta", {})
+        data["meta"]["updated_at"] = datetime.datetime.now().isoformat()
+        with open(FAILED_CITY_LOG, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"写入失败城市日志失败: {e}")
+
+def record_failed_city(city_code, reason="no_data"):
+    try:
+        data = _read_failed_log()
+        cities = data.setdefault("cities", {})
+        entry = cities.get(city_code, {
+            "name": province_codes.get(city_code, city_code),
+            "retries": 0,
+            "status": "failed",
+            "succeeded_once": False
+        })
+        # 如果已经成功过，则不再将状态改回失败
+        if not entry.get("succeeded_once", False):
+            entry["status"] = "failed"
+            entry["last_failed_at"] = datetime.datetime.now().isoformat()
+            entry["reason"] = reason
+        cities[city_code] = entry
+        _write_failed_log(data)
+        logger.info(f"记录失败城市: {province_codes.get(city_code, city_code)}")
+    except Exception as e:
+        logger.error(f"记录失败城市发生异常: {e}")
+
+def mark_city_retry_success(city_code):
+    try:
+        data = _read_failed_log()
+        cities = data.setdefault("cities", {})
+        entry = cities.get(city_code)
+        if not entry:
+            entry = {
+                "name": province_codes.get(city_code, city_code),
+                "retries": 0,
+            }
+        entry["status"] = "succeeded"
+        entry["succeeded_once"] = True
+        entry["last_succeeded_at"] = datetime.datetime.now().isoformat()
+        cities[city_code] = entry
+        _write_failed_log(data)
+        logger.info(f"标记城市成功: {province_codes.get(city_code, city_code)}")
+    except Exception as e:
+        logger.error(f"标记城市成功发生异常: {e}")
+
+def get_failed_city_codes():
+    try:
+        data = _read_failed_log()
+        return [code for code, ent in data.get("cities", {}).items() if ent.get("status") == "failed"]
+    except Exception:
+        return []
+
+def increment_city_retry(city_code):
+    try:
+        data = _read_failed_log()
+        cities = data.setdefault("cities", {})
+        entry = cities.get(city_code)
+        if not entry:
+            entry = {"name": province_codes.get(city_code, city_code), "retries": 0, "status": "failed"}
+        entry["retries"] = int(entry.get("retries", 0)) + 1
+        entry["last_retry_at"] = datetime.datetime.now().isoformat()
+        cities[city_code] = entry
+        _write_failed_log(data)
+    except Exception as e:
+        logger.warning(f"更新重试计数失败: {e}")
+
+
+def search(override_kws=None, override_cities=None):
     try:
         logger.info("开始一次新的搜索任务")
+        t_search_start = time.perf_counter()
 
-        kws = config["job_search"]["kws"].split(",")
-        cities = config["job_search"]["cities"].split(",")
+        kws = override_kws if override_kws else config["job_search"]["kws"].split(",")
+        cities = override_cities if override_cities else config["job_search"]["cities"].split(",")
         account_id=config["job_search"]['account_id']
+        if is_run_once_mode():
+            logger.debug(f"配置解析: kws={kws}, cities={cities}, account_id={account_id} (type={type(account_id).__name__})")
 
-        if '000000' in cities:
+        if '000000' in cities and not override_cities:
             logger.info("检测到全省搜索，使用所有省级代码")
             cities = list(province_codes.keys())
+            if is_run_once_mode():
+                logger.debug(f"全省模式展开后的cities={cities}")
 
         url = "https://we.51job.com/api/job/search-pc"
 
@@ -96,20 +240,30 @@ def search():
         for kw in kws:
             for city in cities:
                 logger.info(f"开始搜索关键词：{kw} 地区：{city}")
+                t_pair_start = time.perf_counter()
                 result = []
                 page = 1
-                max_page = config.getint("job_search", "max_page", fallback=10)
+                max_page = city_max_pages.get(city, default_max_page)
+                if is_run_once_mode():
+                    logger.debug(f"任务初始化: kw={kw}, city={city}, max_page={max_page}")
                 
                 # 为当前搜索任务获取动态认证信息
                 auth_info = auth_manager.get_current_auth_info(keyword=kw, job_area=city)
                 headers = auth_info['headers']
                 cookies = auth_info['cookies']
                 logger.info(f"为关键词 {kw} 地区 {city} 生成动态认证信息")
+                if is_run_once_mode():
+                    try:
+                        logger.debug(f"认证信息: headers_keys={list(headers.keys())}, cookies_keys={list(cookies.keys())}")
+                    except Exception:
+                        logger.debug("认证信息: 记录keys失败")
 
                 jobs = JobSearch(url, headers, cookies)
+                pages_processed = 0
 
                 while True:
                     logger.info(f"正在抓取第 {page} 页")
+                    t_page_start = time.perf_counter()
                     user_params = {
                         "api_key": "51job",
                         "timestamp": f"{int(time.time())}",
@@ -138,9 +292,22 @@ def search():
                         "pageCode": "sou%7Csou%7Csoulb",
                         "scene": "7"  # 保持scene参数
                     }
+                    if is_run_once_mode():
+                        try:
+                            logger.debug(
+                                f"请求参数: keyword={kw}, jobArea={city}, pageNum={page}, sortType={user_params['sortType']}, "
+                                f"accountId={user_params['accountId']} (types: sortType={type(user_params['sortType']).__name__}, "
+                                f"accountId={type(user_params['accountId']).__name__})"
+                            )
+                        except Exception:
+                            logger.debug("请求参数记录失败")
 
                     try:
+                        t_req_start = time.perf_counter()
                         res_json = jobs.get_jobs_json(params=user_params)
+                        t_req_elapsed = time.perf_counter() - t_req_start
+                        if is_run_once_mode():
+                            logger.debug(f"接口请求耗时: {t_req_elapsed:.3f}s")
                     except Exception as e:
                         logger.error(f"请求接口异常: {e}, params: {user_params}")
                         monitor.record_request(success=False, error_type=f"request_exception_{type(e).__name__}")
@@ -170,10 +337,16 @@ def search():
                     df = pd.DataFrame(data=res_json["resultbody"]["job"]["items"])
                     df["search_kw"] = kw
                     df["search_city"] = province_codes.get(city, city)  
+                    if is_run_once_mode():
+                        try:
+                            logger.debug(f"DataFrame创建: shape={df.shape}, columns={list(df.columns)}")
+                        except Exception:
+                            logger.debug("DataFrame信息记录失败")
 
                     expected_columns = ['jobId','jobType','jobName','jobTags','workAreaCode','jobAreaCode','jobAreaString','hrefAreaPinYin','provideSalaryString','issueDateString','confirmDateString','workYear','workYearString','degreeString','industryType1','industryType2','industryType1Str','industryType2Str','major1Str','companyName','fullCompanyName','companyLogo','companyTypeString','companySizeString','companySizeCode','companyIndustryType1Str','companyIndustryType2Str','hrUid','hrName','smallHrLogoUrl','hrPosition','hrLabels','updateDateTime','lon','lat','jobHref','jobDescribe','companyHref','term','termStr','jobTagsForOrder','jobSalaryMax','jobSalaryMin','isReprintJob','applyTimeText','jobReleaseType','coId','search_kw','search_city']
                     existing_columns = [col for col in expected_columns if col in df.columns]
                     df = df[existing_columns]
+                    t_pre_start = time.perf_counter()
 
                     # 数据预处理
                     list_columns = ['jobTags', 'hrLabels', 'jobTagsForOrder']
@@ -188,13 +361,35 @@ def search():
                                 df[col] = df[col].astype(float)
                             except Exception as e:
                                 logger.warning(f"薪资字段转换异常: {e}")
+                    t_pre_elapsed = time.perf_counter() - t_pre_start
+                    if is_run_once_mode():
+                        logger.debug(f"数据预处理耗时: {t_pre_elapsed:.3f}s")
 
-                    # 数据库操作 - 使用DatabaseManager
-                    mysql_config = config['mysql']
+                    # 在 run_once 模式下，先将处理后的结果本地保存一份（每页一份）
+                    if is_run_once_mode():
+                        try:
+                            date_dir = time.strftime('%Y%m%d')
+                            base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'local_results', 'run_once', date_dir)
+                            os.makedirs(base_dir, exist_ok=True)
+                            # 关键词和城市编码用于文件名，避免特殊字符
+                            # 保留中文、字母、数字、下划线与连字符
+                            safe_kw = re.sub(r"[^\w\-]", "_", str(kw))
+                            safe_city = re.sub(r"[^\w\-]", "_", str(city))
+                            ts = time.strftime('%H%M%S')
+                            file_name = f"kw-{safe_kw}_city-{safe_city}_page-{page}_{ts}.csv"
+                            file_path = os.path.join(base_dir, file_name)
+                            df.to_csv(file_path, index=False, encoding='utf-8-sig')
+                            logger.info(f"本地保存结果: {file_path}, 行数={len(df)}")
+                        except Exception as e:
+                            logger.warning(f"本地保存结果失败: {e}")
+
+                    # 数据库操作 - 使用持久化的 DatabaseManager（循环外初始化）
                     try:
-                        # 使用DatabaseManager保存数据，启用重试机制
-                        db_manager = DatabaseManager(mysql_config)
+                        t_db_start = time.perf_counter()
                         success = db_manager.save_dataframe(df, 'job_listings', if_exists='append', max_retries=5)
+                        t_db_elapsed = time.perf_counter() - t_db_start
+                        if is_run_once_mode():
+                            logger.debug(f"数据库写入耗时: {t_db_elapsed:.3f}s, 行数={len(df)}")
                         
                         if success:
                             logger.info(f"成功写入 {len(df)} 条数据到MySQL数据库, 关键词: {kw}, 页码: {page}")
@@ -205,10 +400,13 @@ def search():
                         
                     except Exception as e:
                         logger.error(f"数据库操作异常: {e}，跳过当前页面数据")
+                        if is_run_once_mode():
+                            logger.debug("数据库写入异常", exc_info=True)
                         monitor.record_request(success=False, error_type=f"database_exception_{type(e).__name__}")
                         # 数据库异常时不中断整个抓取流程，继续下一页
 
                     page += 1
+                    pages_processed += 1
 
                     if page > max_page:
                         logger.info(f"关键词: {kw} 城市： {city} 达到最大页数 {max_page}，结束抓取")
@@ -220,22 +418,39 @@ def search():
                         base_delay += random.uniform(*DELAY_CONFIG['high_page_delay'])
                     sleep_time = int(base_delay)
                     logger.info(f"关键词: {kw} 城市： {city}，第 {page-1} 页抓取完成，休眠 {sleep_time} 秒")
+                    if is_run_once_mode():
+                        t_page_elapsed = time.perf_counter() - t_page_start
+                        logger.debug(f"页面抓取总耗时: {t_page_elapsed:.3f}s")
                     time.sleep(sleep_time)
                 # 记录城市任务完成情况
-                if len(result) > 0:
+                total_jobs = 0
+                for page_result in result:
+                    if page_result and isinstance(page_result, dict) and page_result.get("resultbody", {}).get("job", {}).get("items"):
+                        total_jobs += len(page_result['resultbody']['job']['items'])
+                
+                if total_jobs > 0:
                     monitor.record_city_completion(success=True)
-                    logger.info(f"城市 {province_codes.get(city, city)} 关键词 {kw} 任务完成，共获取 {len(result)} 条数据")
+                    logger.info(f"城市 {province_codes.get(city, city)} 关键词 {kw} 任务完成，共获取 {total_jobs} 条数据")
+                    # 标记该城市已成功，避免被视为失败
+                    mark_city_retry_success(city)
                 else:
                     monitor.record_city_completion(success=False)
                     logger.warning(f"城市 {province_codes.get(city, city)} 关键词 {kw} 任务失败，未获取到数据")
+                    # 记录失败城市，供后续重试
+                    record_failed_city(city, reason="no_data")
+                if is_run_once_mode():
+                    t_pair_elapsed = time.perf_counter() - t_pair_start
+                    logger.debug(f"关键词/城市任务耗时: {t_pair_elapsed:.3f}s, 处理页数={pages_processed}, 总数据量={total_jobs}")
                 
                 # 每个城市/关键词任务完成后休眠，根据数据量动态调整
                 city_delay = random.uniform(*DELAY_CONFIG['city_task_delay'])
-                if len(result) == 0:  # 如果没有获取到数据，增加更长延时
+                if total_jobs == 0:  # 如果没有获取到数据，增加更长延时
                     city_delay += random.uniform(*DELAY_CONFIG['no_data_penalty'])
                     logger.warning(f"城市 {province_codes.get(city, city)} 关键词 {kw} 未获取到数据，增加延时")
                 sleep_time = int(city_delay)
                 logger.info(f"关键词: {kw} 城市： {city}  抓取任务完成，休眠 {sleep_time} 秒")
+                if is_run_once_mode():
+                    logger.debug(f"城市/关键词休眠时长: {sleep_time}s")
                 time.sleep(sleep_time)
                 
                 # 每完成5个城市任务后生成监控报告
@@ -243,10 +458,21 @@ def search():
                     monitor.log_report()
             sleep_time=random.randint(3, 30)
             logger.info(f"关键词: {kw} 的所有城市搜索任务已完成，休眠 {sleep_time} 秒")
+            if is_run_once_mode():
+                logger.debug(f"关键词任务休眠时长: {sleep_time}s")
             time.sleep(sleep_time)
         logger.info("本次搜索任务全部完成")
+        if is_run_once_mode():
+            t_search_elapsed = time.perf_counter() - t_search_start
+            logger.debug(f"本次搜索总耗时: {t_search_elapsed:.3f}s")
     except Exception as e:
         logger.exception(f"search 函数发生未捕获异常: {e}")
+        if is_run_once_mode():
+            try:
+                t_search_elapsed = time.perf_counter() - t_search_start
+                logger.debug(f"本次搜索异常结束，总耗时: {t_search_elapsed:.3f}s")
+            except Exception:
+                pass
 
 
 timezone = pytz.timezone("Asia/Shanghai")
@@ -265,6 +491,7 @@ logger.info(f"next running time (night): {night_time}")
 
 def scheduled_search():
     logger.info("开始执行搜索任务")
+    t_sched_start = time.perf_counter()
     try:
         search()
     except Exception as e:
@@ -273,6 +500,9 @@ def scheduled_search():
     finally:
         # 任务结束时生成最终报告
         monitor.log_report()
+        if is_run_once_mode():
+            t_sched_elapsed = time.perf_counter() - t_sched_start
+            logger.debug(f"scheduled_search耗时: {t_sched_elapsed:.3f}s")
         # 检查是否存在logs文件夹，如果不存在则创建
         logs_dir = 'logs'
         if not os.path.exists(logs_dir):
@@ -289,23 +519,69 @@ def scheduled_search():
             logger.info(f"监控报告已保存到: {report_file}")
         except Exception as e:
             logger.error(f"保存监控报告失败: {e}")
+        # 主任务完成后，对失败城市进行重试
+        try:
+            failed_cities = get_failed_city_codes()
+            if failed_cities:
+                rest_minutes = int(FAILED_CITY_RETRY.get('rest_minutes', 15))
+                max_rounds = int(FAILED_CITY_RETRY.get('max_rounds', 2))
+                logger.info(f"检测到失败城市: {failed_cities}，休眠 {rest_minutes} 分钟后开始重试")
+                time.sleep(rest_minutes * 60)
+                for round_idx in range(1, max_rounds + 1):
+                    failed_cities = get_failed_city_codes()
+                    if not failed_cities:
+                        logger.info("所有失败城市已在前一轮重试中成功，结束重试流程")
+                        break
+                    logger.info(f"开始失败城市第 {round_idx}/{max_rounds} 轮重试: {failed_cities}")
+                    # 更新重试次数
+                    for c in failed_cities:
+                        increment_city_retry(c)
+                    # 针对失败城市重新执行抓取（使用原有关键词配置）
+                    try:
+                        search(override_cities=failed_cities)
+                    except Exception as e:
+                        logger.error(f"第 {round_idx} 轮重试执行异常: {e}")
+                    # 每轮重试之间适当休眠，避免过于频繁
+                    mid_delay = random.uniform(*DELAY_CONFIG['city_task_delay'])
+                    logger.info(f"第 {round_idx} 轮重试完成，休眠 {int(mid_delay)} 秒")
+                    time.sleep(int(mid_delay))
+            else:
+                logger.info("本次任务无失败城市，无需重试")
+        except Exception as e:
+            logger.error(f"失败城市重试流程异常: {e}")
+        finally:
+            # 释放数据库引擎资源
+            try:
+                db_manager.close()
+            except Exception:
+                pass
+def run_scheduler_loop():
+    # 在每天下午6-9点之间的随机时间点启动任务
+    scheduler = schedule.Scheduler()
+    scheduler.every().day.at(random_time, timezone).do(scheduled_search)
+    # 在每天晚上21-22点之间的随机时间点启动任务
+    scheduler.every().day.at(night_time, timezone).do(scheduled_search)
 
-# 在每天下午6-9点之间的随机时间点启动任务
-scheduler = schedule.Scheduler()
-scheduler.every().day.at(random_time, timezone).do(scheduled_search)
-# 在每天晚上21-22点之间的随机时间点启动任务
-scheduler.every().day.at(night_time, timezone).do(scheduled_search)
+    logger.info("程序启动，配置定时任务")
 
-logger.info("程序启动，配置定时任务")
+    # 启动认证管理器的自动更新功能
+    auth_manager = get_auth_manager()
+    auth_manager.start_auto_update()
+    logger.info("认证管理器自动更新已启动")
 
-# 启动认证管理器的自动更新功能
-auth_manager = get_auth_manager()
-auth_manager.start_auto_update()
-logger.info("认证管理器自动更新已启动")
+    while True:
+        try:
+            scheduler.run_pending()
+        except Exception as e:
+            logger.exception(f"定时任务运行异常: {e}")
+        time.sleep(0.5)
 
-while True:
-    try:
-        scheduler.run_pending()
-    except Exception as e:
-        logger.exception(f"定时任务运行异常: {e}")
-    time.sleep(0.5)
+if __name__ == '__main__':
+    mode = sys.argv[1] if len(sys.argv) > 1 else 'scheduler'
+    if mode == 'run_once':
+        enable_debug_logging()
+        logger.debug("运行模式: run_once")
+        scheduled_search()
+    else:
+        logger.info("运行模式: scheduler")
+        run_scheduler_loop()

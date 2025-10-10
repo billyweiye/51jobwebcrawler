@@ -17,14 +17,14 @@ class JobSearch:
         self.headers = headers
         self.max_retry = 10
         
-        # 如果没有提供cookies，则自动获取最新的cookies
+        # 始终保持cookie_manager实例，以便在需要时刷新cookies
+        self.cookie_manager = CookieManager()
         if cookies is None:
             logger.info("未提供cookies，自动获取最新cookies")
-            self.cookie_manager = CookieManager()
             self.cookies = self.cookie_manager.get_cookies()
         else:
             self.cookies = cookies
-            self.cookie_manager = None
+            logger.info("使用提供的cookies，但保持cookie_manager以便后续刷新")
             
         logger.info(f"JobSearch 实例初始化: url={url}, cookies={list(self.cookies.keys())}")
     
@@ -86,10 +86,9 @@ class JobSearch:
                 pattern = r"var arg1='([A-F0-9]+)';"
                 arg1 = re.search(pattern, response.text)
                 if arg1:
-                    logger.info(f"retry:{attempt + 1} set_cookies，设置 acw_sc__v2")
                     arg1 = arg1.group(1)
                     self.cookies['acw_sc__v2'] = getAcwScV2(arg1)
-                    logger.debug(f"已设置 acw_sc__v2，重新请求")
+                    logger.info(f"retry:{attempt + 1} set_cookies，设置 acw_sc__v2")
                     continue
                 
                 if response.status_code == 200:

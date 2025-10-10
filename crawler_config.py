@@ -48,3 +48,9 @@ DB_CONFIG = {
     'batch_size': 1000,  # 批量插入大小
     'connection_retry': 5,  # 数据库连接重试次数
 }
+
+# 失败城市重试配置
+FAILED_CITY_RETRY = {
+    'rest_minutes': 10,   # 完成主任务后第一次重试前休眠时长（分钟）
+    'max_rounds': 3       # 最大重试轮次（每轮针对仍失败的城市重试一次）
+}
