@@ -31,17 +31,20 @@ class DatabaseManager:
             f"@{mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}"
             f"?charset=utf8mb4"
         )
+        # 持久化引擎：在初始化时创建并复用
+        self.engine = None
+        self._create_persistent_engine()
         
-    def create_engine(self):
-        """创建数据库引擎"""
+    def _create_persistent_engine(self):
+        """创建并持有持久化数据库引擎"""
         try:
-            engine = create_engine(
+            self.engine = create_engine(
                 self.connection_string,
                 pool_pre_ping=True,      # 连接前检查连接是否有效
-                pool_recycle=1800,       # 30分钟后回收连接（减少超时风险）
-                pool_size=3,             # 减少连接池大小，避免过多连接
-                max_overflow=5,          # 减少最大溢出连接数
-                pool_timeout=60,         # 增加获取连接的超时时间
+                pool_recycle=3600,       # 60分钟后回收连接（减少超时风险）
+                pool_size=3,             # 连接池大小
+                max_overflow=5,          # 最大溢出连接数
+                pool_timeout=60,         # 获取连接的超时时间
                 connect_args={
                     'connect_timeout': 60,   # MySQL连接超时时间
                     'read_timeout': 60,      # 读取超时时间
@@ -51,20 +54,17 @@ class DatabaseManager:
                 },
                 echo=False               # 不输出SQL语句
             )
-            logger.debug("数据库引擎创建成功")
-            return engine
+            logger.debug("持久化数据库引擎创建成功")
         except Exception as e:
-            logger.error(f"创建数据库引擎失败: {e}")
+            logger.error(f"创建持久化数据库引擎失败: {e}")
             raise
     
     @contextmanager
     def get_connection(self):
-        """获取数据库连接的上下文管理器"""
-        engine = None
+        """获取数据库连接的上下文管理器（复用引擎）"""
         connection = None
         try:
-            engine = self.create_engine()
-            connection = engine.connect()
+            connection = self.engine.connect()
             logger.debug("数据库连接获取成功")
             yield connection
         except Exception as e:
@@ -74,19 +74,14 @@ class DatabaseManager:
             if connection:
                 connection.close()
                 logger.debug("数据库连接已关闭")
-            if engine:
-                engine.dispose()
-                logger.debug("数据库引擎已释放")
     
     @contextmanager
     def get_transaction(self):
-        """获取数据库事务的上下文管理器"""
-        engine = None
+        """获取数据库事务的上下文管理器（复用引擎）"""
         connection = None
         trans = None
         try:
-            engine = self.create_engine()
-            connection = engine.connect()
+            connection = self.engine.connect()
             trans = connection.begin()
             logger.debug("数据库事务开始")
             yield connection
@@ -102,9 +97,6 @@ class DatabaseManager:
             if connection:
                 connection.close()
                 logger.debug("数据库连接已关闭")
-            if engine:
-                engine.dispose()
-                logger.debug("数据库引擎已释放")
     
     def save_dataframe(self, df, table_name, if_exists='append', chunksize=1000, max_retries=3):
         """
@@ -184,6 +176,16 @@ class DatabaseManager:
             except Exception as e:
                 logger.error(f"执行查询失败: {e}")
                 raise
+
+
+    def close(self):
+        """释放持久化引擎资源"""
+        try:
+            if self.engine:
+                self.engine.dispose()
+                logger.debug("持久化数据库引擎已释放")
+        except Exception as e:
+            logger.warning(f"释放引擎资源时发生异常: {e}")
     
     def execute_sql(self, sql, params=None, max_retries=3):
         """
