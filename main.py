@@ -428,7 +428,7 @@ def search(override_kws=None, override_cities=None):
                     if page_result and isinstance(page_result, dict) and page_result.get("resultbody", {}).get("job", {}).get("items"):
                         total_jobs += len(page_result['resultbody']['job']['items'])
                 
-                if total_jobs > 0:
+                if total_jobs >= 20*max_page:
                     monitor.record_city_completion(success=True)
                     logger.info(f"城市 {province_codes.get(city, city)} 关键词 {kw} 任务完成，共获取 {total_jobs} 条数据")
                     # 标记该城市已成功，避免被视为失败
