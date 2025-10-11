@@ -478,10 +478,16 @@ def search(override_kws=None, override_cities=None):
 timezone = pytz.timezone("Asia/Shanghai")
 
 # 随机生成每天下午6-9点之间的一个时间点
-random_hour = random.randint(6, 9)
-random_minute = random.randint(0, 59)
-random_time = f"{random_hour:02d}:{random_minute:02d}"
-logger.info(f"next running time (evening): {random_time}")
+morning_hour = random.randint(6, 9)
+morning_minute = random.randint(0, 59)
+morning_time = f"{morning_hour:02d}:{morning_minute:02d}"
+logger.info(f"next running time (morning): {morning_time}")
+
+# 随机生成每天下午12-13点之间的一个时间点
+afternoon_hour = random.randint(12, 13)
+afternoon_minute = random.randint(0, 59)
+afternoon_time = f"{afternoon_hour:02d}:{afternoon_minute:02d}"
+logger.info(f"next running time (afternoon): {afternoon_time}")
 
 # 新增：随机生成每天晚上21-22点之间的一个时间点
 night_hour = random.randint(20, 23)
@@ -556,9 +562,12 @@ def scheduled_search():
             except Exception:
                 pass
 def run_scheduler_loop():
-    # 在每天下午6-9点之间的随机时间点启动任务
+    
     scheduler = schedule.Scheduler()
-    scheduler.every().day.at(random_time, timezone).do(scheduled_search)
+    # 在每天下午6-9点之间的随机时间点启动任务
+    scheduler.every().day.at(morning_time, timezone).do(scheduled_search)
+    # 在每天下午12-13点之间的随机时间点启动任务
+    scheduler.every().day.at(afternoon_time, timezone).do(scheduled_search)
     # 在每天晚上21-22点之间的随机时间点启动任务
     scheduler.every().day.at(night_time, timezone).do(scheduled_search)
 

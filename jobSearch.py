@@ -7,7 +7,7 @@ import random
 from acwCookie import getAcwScV2
 from cookie_manager import CookieManager
 import logging
-from crawler_config import DELAY_CONFIG, RETRY_CONFIG, DATA_VALIDATION
+from crawler_config import DELAY_CONFIG, RETRY_CONFIG, DATA_VALIDATION, USER_AGENTS
 
 logger=logging.getLogger(__name__)
 
@@ -16,6 +16,8 @@ class JobSearch:
         self.url = url
         self.headers = headers
         self.max_retry = 10
+        # 复用会话以保持连接与Set-Cookie
+        self.session = requests.Session()
         
         # 始终保持cookie_manager实例，以便在需要时刷新cookies
         self.cookie_manager = CookieManager()
@@ -54,11 +56,14 @@ class JobSearch:
             return None
 
     def search_jobs(self, params):
-        import time
-        import random
         
         max_retries = RETRY_CONFIG['max_retries']
         cookie_refreshed = False  # 标记是否已经刷新过cookies
+        # 构造 referer 以贴近真实请求
+        try:
+            referer_url = f"https://we.51job.com/pc/search?keyword={params.get('keyword','')}&jobArea={params.get('jobArea','')}&searchType=2"
+        except Exception:
+            referer_url = "https://we.51job.com/pc/search"
         
         for attempt in range(max_retries):
             try:
@@ -70,6 +75,14 @@ class JobSearch:
                     logger.info(f"重试前延时 {delay:.1f} 秒")
                     time.sleep(delay)
                 
+                # UA 轮换与 Referer 设置，降低被识别概率
+                try:
+                    ua_choice = random.choice(USER_AGENTS)
+                    self.headers['User-Agent'] = ua_choice
+                    self.headers['Referer'] = referer_url
+                except Exception:
+                    pass
+
                 # 如果连续失败超过一半次数且还没刷新过cookies，尝试刷新cookies
                 if attempt >= max_retries // 2 and not cookie_refreshed:
                     logger.warning(f"连续失败{attempt}次，尝试刷新cookies")
@@ -79,7 +92,7 @@ class JobSearch:
                     else:
                         logger.warning("cookies刷新失败")
                 
-                response = requests.get(self.url, params=params, headers=self.headers, cookies=self.cookies, timeout=RETRY_CONFIG['timeout'], verify=certifi.where())
+                response = self.session.get(self.url, params=params, headers=self.headers, cookies=self.cookies, timeout=RETRY_CONFIG['timeout'], verify=certifi.where())
                 logger.info(f"请求URL: {response.url}，状态码: {response.status_code}")
                 
                 # 处理acw_sc__v2 cookie的逻辑
@@ -92,12 +105,25 @@ class JobSearch:
                     continue
                 
                 if response.status_code == 200:
-                    # 检查响应内容是否有效
-                    if response.text.strip() and not 'error' in response.text.lower():
-                        logger.info(f"请求成功，状态码: {response.status_code}")
-                        return response
+                    # 检查响应内容类型与内容是否有效
+                    content_type = response.headers.get('Content-Type', '')
+                    if 'application/json' in content_type.lower():
+                        if response.text.strip() and 'error' not in response.text.lower():
+                            logger.info(f"请求成功，状态码: {response.status_code}")
+                            return response
+                        else:
+                            logger.warning(f"响应内容异常(JSON): {response.text[:200]}")
+                            # JSON 但内容异常，短暂退避
+                            time.sleep(random.uniform(*DELAY_CONFIG['retry_delay_base']))
+                            continue
                     else:
-                        logger.warning(f"响应内容异常: {response.text[:200]}")
+                        # 返回非JSON，可能为反爬虫页面
+                        preview = response.text[:200] if response.text else ''
+                        logger.warning(f"响应类型异常: Content-Type={content_type}, 可能触发反爬虫，预览: {preview}")
+                        time.sleep(random.uniform(*DELAY_CONFIG['anti_spider_delay']))
+                        # 尝试刷新cookies一次
+                        if not cookie_refreshed and self.refresh_cookies():
+                            cookie_refreshed = True
                         continue
                 else:
                     logger.warning(f"请求失败，状态码: {response.status_code}, 响应: {response.text[:200]}")
@@ -105,7 +131,17 @@ class JobSearch:
                     # 对于特定错误码增加更长延时
                     if response.status_code in RETRY_CONFIG['anti_spider_codes']:
                         logger.warning("遇到反爬虫限制，增加延时")
-                        time.sleep(random.uniform(*DELAY_CONFIG['anti_spider_delay']))
+                        # 尊重 Retry-After
+                        retry_after = response.headers.get('Retry-After')
+                        if retry_after:
+                            try:
+                                ra = int(retry_after)
+                                logger.info(f"服务端建议的重试等待: {ra}s")
+                                time.sleep(ra)
+                            except Exception:
+                                time.sleep(random.uniform(*DELAY_CONFIG['anti_spider_delay']))
+                        else:
+                            time.sleep(random.uniform(*DELAY_CONFIG['anti_spider_delay']))
                         
                         # 如果遇到反爬虫且还没刷新过cookies，立即尝试刷新
                         if not cookie_refreshed:
