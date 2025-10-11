@@ -200,6 +200,7 @@ def get_failed_city_codes():
         return []
 
 def increment_city_retry(city_code):
+    """增加指定城市的重试次数"""
     try:
         data = _read_failed_log()
         cities = data.setdefault("cities", {})
@@ -529,8 +530,8 @@ def scheduled_search():
         try:
             failed_cities = get_failed_city_codes()
             if failed_cities:
-                rest_minutes = int(FAILED_CITY_RETRY.get('rest_minutes', 15))
-                max_rounds = int(FAILED_CITY_RETRY.get('max_rounds', 2))
+                rest_minutes = int(FAILED_CITY_RETRY.get('rest_minutes', 15)) # 每次重试之间的休息时间（分钟）
+                max_rounds = int(FAILED_CITY_RETRY.get('max_rounds', 2)) # 最大重试轮数
                 logger.info(f"检测到失败城市: {failed_cities}，休眠 {rest_minutes} 分钟后开始重试")
                 time.sleep(rest_minutes * 60)
                 for round_idx in range(1, max_rounds + 1):
@@ -560,7 +561,7 @@ def scheduled_search():
             try:
                 db_manager.close()
             except Exception:
-                pass
+                logger.error("关闭数据库引擎资源时发生异常")
 def run_scheduler_loop():
     
     scheduler = schedule.Scheduler()
