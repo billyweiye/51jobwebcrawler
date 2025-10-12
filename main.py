@@ -217,7 +217,16 @@ def increment_city_retry(city_code):
 
 def search(override_kws=None, override_cities=None):
     try:
-        logger.info("开始一次新的搜索任务")
+        if override_cities is None:
+            logger.info("开始一次新的搜索任务")
+            # 清空 failed_cities.json
+            if os.path.exists(FAILED_CITY_LOG):
+                os.remove(FAILED_CITY_LOG)
+                logger.info("清空 failed_cities.json")
+        else:
+            logger.info("开始一次失败城市重试任务")
+                    
+        
         t_search_start = time.perf_counter()
 
         kws = override_kws if override_kws else config["job_search"]["kws"].split(",")
