@@ -4,6 +4,7 @@ import re
 import certifi
 import time
 import random
+import urllib.parse
 from acwCookie import getAcwScV2
 from cookie_manager import CookieManager
 import logging
@@ -61,7 +62,13 @@ class JobSearch:
         cookie_refreshed = False  # 标记是否已经刷新过cookies
         # 构造 referer 以贴近真实请求
         try:
-            referer_url = f"https://we.51job.com/pc/search?keyword={params.get('keyword','')}&jobArea={params.get('jobArea','')}&searchType=2"
+            # 使用URL编码确保Referer仅包含ASCII，避免requests在写HTTP头时的latin-1编码错误
+            referer_qs = urllib.parse.urlencode({
+                'keyword': params.get('keyword', ''),
+                'jobArea': params.get('jobArea', ''),
+                'searchType': 2
+            })
+            referer_url = f"https://we.51job.com/pc/search?{referer_qs}"
         except Exception:
             referer_url = "https://we.51job.com/pc/search"
         
