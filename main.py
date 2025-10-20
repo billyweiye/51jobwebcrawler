@@ -393,10 +393,30 @@ def search(override_kws=None, override_cities=None):
                         except Exception as e:
                             logger.warning(f"本地保存结果失败: {e}")
 
-                    # 数据库操作 - 使用持久化的 DatabaseManager（循环外初始化）
+                    # 数据库操作 - 使用execute_sql方法和INSERT IGNORE批量插入
                     try:
                         t_db_start = time.perf_counter()
-                        success = db_manager.save_dataframe(df, 'job_listings', if_exists='append', max_retries=5)
+                        
+                        # 将DataFrame转换为字典列表，然后清理NaN值
+                        # 直接转换后再处理，避免Pandas在类型转换时将None转回NaN的问题
+                        records = df.to_dict('records')
+                        
+                        # 将所有NaN/NA值替换为None（对应SQL的NULL）
+                        # pd.isna() 可以识别所有类型的缺失值（NaN, None, pd.NA等）
+                        for record in records:
+                            for key, value in list(record.items()):
+                                if pd.isna(value):
+                                    record[key] = None
+                        
+                        # 构造INSERT IGNORE SQL语句，使用命名参数占位符
+                        columns = list(df.columns)
+                        columns_str = ', '.join([f'`{col}`' for col in columns])
+                        placeholders = ', '.join([f':{col}' for col in columns])
+                        insert_sql = f"INSERT IGNORE INTO job_listings ({columns_str}) VALUES ({placeholders})"
+                        
+                        # 使用execute_sql批量插入数据
+                        success = db_manager.execute_sql(insert_sql, params=records, max_retries=5, batch_size=1000)
+                        
                         t_db_elapsed = time.perf_counter() - t_db_start
                         if is_run_once_mode():
                             logger.debug(f"数据库写入耗时: {t_db_elapsed:.3f}s, 行数={len(df)}")

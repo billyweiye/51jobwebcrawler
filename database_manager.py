@@ -187,14 +187,18 @@ class DatabaseManager:
         except Exception as e:
             logger.warning(f"释放引擎资源时发生异常: {e}")
     
-    def execute_sql(self, sql, params=None, max_retries=3):
+    def execute_sql(self, sql, params=None, max_retries=3, batch_size=1000):
         """
-        执行SQL语句（非查询），支持重试机制
+        执行SQL语句（非查询），支持重试机制和批量插入
         
         Args:
-            sql: SQL语句
-            params: SQL参数
+            sql: SQL语句，支持命名参数占位符（如 :column_name）
+            params: SQL参数，支持以下格式：
+                   - dict: 单条记录的参数字典
+                   - list[dict]: 批量插入的参数列表（每个dict代表一条记录）
+                   - list/tuple: 位置参数列表
             max_retries: 最大重试次数
+            batch_size: 批量插入时每批次的大小
             
         Returns:
             bool: 是否执行成功
@@ -203,9 +207,23 @@ class DatabaseManager:
             try:
                 with self.get_transaction() as connection:
                     if params:
-                        # 确保参数格式正确
-                        if isinstance(params, dict):
+                        # 检查是否为批量插入（list of dict格式）
+                        if isinstance(params, list) and len(params) > 0 and isinstance(params[0], dict):
+                            # 批量插入模式：分批执行以提高性能和稳定性
+                            total_records = len(params)
+                            logger.debug(f"批量插入模式：共 {total_records} 条记录，批次大小 {batch_size}")
+                            
+                            for i in range(0, total_records, batch_size):
+                                batch = params[i:i + batch_size]
+                                # 使用executemany进行批量插入
+                                connection.execute(text(sql), batch)
+                                logger.debug(f"批量插入进度: {min(i + batch_size, total_records)}/{total_records}")
+                            
+                            logger.info(f"批量插入完成: {total_records} 条记录")
+                        # 单条记录的字典参数
+                        elif isinstance(params, dict):
                             connection.execute(text(sql), params)
+                        # 位置参数列表（向后兼容）
                         elif isinstance(params, (list, tuple)):
                             # 转换为字典格式
                             param_dict = {f'param_{i}': param for i, param in enumerate(params)}
